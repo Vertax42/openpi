@@ -51,7 +51,7 @@ def test_core_functions():
         env = BiARX5RealEnvironment(
             left_arm_port="can1",
             right_arm_port="can3",
-            log_level="INFO",
+            log_level="DEBUG",  # 改为 DEBUG 以查看详细日志
             use_multithreading=True,
             setup_robot=True,  # 连接硬件
         )
@@ -108,12 +108,18 @@ def test_core_functions():
         small_perturbation = np.random.uniform(-0.05, 0.05, current_state.shape)
         test_action = current_state + small_perturbation
 
+        # 限制夹爪范围 [0.002, 0.08]
+        # 左夹爪在索引 6，右夹爪在索引 13
+        test_action[6] = np.clip(test_action[6], 0.002, 0.08)  # 左夹爪
+        test_action[13] = np.clip(test_action[13], 0.002, 0.08)  # 右夹爪
+
         print(f"测试动作:")
         print(f"  - 动作维度: {test_action.shape}")
         print(
             f"  - 扰动范围: [{small_perturbation.min():.4f}, {small_perturbation.max():.4f}]"
         )
         print(f"  - 动作范围: [{test_action.min():.3f}, {test_action.max():.3f}]")
+        print(f"  - 左夹爪: {test_action[6]:.4f}, 右夹爪: {test_action[13]:.4f}")
 
         # 按照 OpenPI 格式包装动作
         action_dict = {"actions": test_action}
@@ -167,26 +173,33 @@ def test_core_functions():
             return
 
         if user_input == "y":
-            print("执行 5 步连续循环...")
-            for step in range(5):
+            print("执行 10 步连续循环...")
+            for step in range(10):
                 try:
                     # 获取观测
                     obs = env.get_observation()
                     current_state = obs["state"]
+                    print(f"当前状态: {current_state}")
 
                     # 生成更明显的动作
-                    perturbation = np.random.uniform(-0.02, 0.02, current_state.shape)
+                    perturbation = np.random.uniform(-0.01, 0.01, current_state.shape)
                     action = current_state + perturbation
+
+                    # 限制夹爪范围 [0.002, 0.08]
+                    # 左夹爪在索引 6，右夹爪在索引 13
+                    action[6] = np.clip(action[6], 0.002, 0.08)  # 左夹爪
+                    action[13] = np.clip(action[13], 0.002, 0.08)  # 右夹爪
 
                     # 执行动作
                     env.apply_action({"actions": action})
 
-                    print(f"  步骤 {step+1}/5: ✓ 观测->动作循环成功")
+                    print(f"  步骤 {step+1}/10: ✓ 观测->动作循环成功")
+                    print(f"    - 左夹爪: {action[6]:.4f}, 右夹爪: {action[13]:.4f}")
 
                     # 等待机器人响应
                     import time
 
-                    time.sleep(0.2)  # 增加等待时间
+                    time.sleep(0.5)  # 增加等待时间
 
                 except KeyboardInterrupt:
                     print(f"\n⚠️  在步骤 {step+1} 检测到用户中断")

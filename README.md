@@ -169,7 +169,7 @@ The command will log training progress to the console and save checkpoints to th
 Once training is complete, we can run inference by spinning up a policy server and then querying it from a LIBERO evaluation script. Launching a model server is easy (we use the checkpoint for iteration 20,000 for this example, modify as needed):
 
 ```bash
-uv run scripts/serve_policy.py policy:checkpoint --policy.config=pi05_libero --policy.dir=checkpoints/pi05_libero/my_experiment/20000
+python scripts/serve_policy.py policy:checkpoint --policy.config=pi05_base_arx5_lora --policy.dir=checkpoints/pi05_base_arx5_lora/bi_arx5_pick_and_place_cube/19999
 ```
 
 This will spin up a server that listens on port 8000 and waits for observations to be sent to it. We can then run an evaluation script (or robot runtime) that queries the server.

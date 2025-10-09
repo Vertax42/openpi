@@ -57,7 +57,7 @@ class BiARX5RealEnv:
             use_multithreading=use_multithreading,
             inference_mode=True,  # 推理模式，设置合适的 preview_time
             controller_dt=0.01,  # 100Hz 控制频率
-            default_preview_time=0.015,  # 推理模式下的预览时间
+            preview_time=0.0,  # 推理模式下的预览时间（15ms）
         )
 
         # 创建机器人实例 - 使用你现有的 BiARX5 类
@@ -149,8 +149,8 @@ class BiARX5RealEnv:
                 "Switching from gravity compensation to normal position control for action execution"
             )
             self.robot.set_to_normal_position_control()
-        else:
-            logger.info("Robot is already in normal position control mode")
+        # else:
+        #     logger.info("Robot is already in normal position control mode")
 
         # 将 OpenPI 的动作数组转换为你的 BiARX5 动作字典格式
         action_dict = {}

@@ -53,30 +53,45 @@ class BiARX5RealEnvironment(_environment.Environment):
 
         obs = self._ts.observation
 
-        # 处理图像数据 - 移除深度图像
-        for cam_name in list(obs["images"].keys()):
-            if "_depth" in cam_name:
-                del obs["images"][cam_name]
+        # 创建新的图像字典，避免修改原始数据
+        processed_images = {}
 
-        # 调整图像尺寸并转换格式 (H,W,C) -> (C,H,W)
+        # 处理图像数据 - 移除深度图像并调整尺寸
         for cam_name in obs["images"]:
-            # 将单个图像扩展为批次格式 [1, H, W, C]，然后调用 resize_with_pad
-            single_img = obs["images"][cam_name]
-            batch_img = np.expand_dims(single_img, axis=0)  # [H, W, C] -> [1, H, W, C]
+            if "_depth" in cam_name:
+                continue  # 跳过深度图像
 
+            # 原始图像已经是 uint8 格式 (480, 640, 3)
+            single_img = obs["images"][cam_name]
+
+            # 调试：打印原始图像信息
+            logger.debug(
+                f"Camera {cam_name}: original shape={single_img.shape}, dtype={single_img.dtype}"
+            )
+
+            # 将单个图像扩展为批次格式 [1, H, W, C] 以使用 resize_with_pad
+            batch_img = np.expand_dims(single_img, axis=0)  # [H, W, C] -> [1, H, W, C]
+            logger.debug(f"Camera {cam_name}: batch shape={batch_img.shape}")
+
+            # 调整图像尺寸到指定分辨率
             resized_batch = image_tools.resize_with_pad(
                 batch_img, self._render_height, self._render_width
             )
+            logger.debug(
+                f"Camera {cam_name}: resized batch shape={resized_batch.shape}"
+            )
 
             # 取出批次中的第一个图像 [1, H, W, C] -> [H, W, C]
-            resized_img = resized_batch[0]
+            resized_img = resized_batch[0]  # 已经是 uint8 格式
+            logger.debug(f"Camera {cam_name}: resized shape={resized_img.shape}")
 
-            img = image_tools.convert_to_uint8(resized_img)
-            obs["images"][cam_name] = einops.rearrange(img, "h w c -> c h w")
+            # 转换为 OpenPI 期望的格式 (H,W,C) -> (C,H,W)
+            processed_images[cam_name] = einops.rearrange(resized_img, "h w c -> c h w")
 
         return {
             "state": obs["qpos"],
-            "images": obs["images"],
+            "images": processed_images,  # 使用新创建的字典
+            # prompt 由 policy server 的 InjectDefaultPrompt 注入，无需在这里添加
         }
 
     @override
