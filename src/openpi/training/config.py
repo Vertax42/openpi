@@ -904,9 +904,12 @@ _CONFIGS = [
         ).get_freeze_filter(),
         batch_size=64,  # the total batch_size not pre_gpu batch_size
         weight_loader=weight_loaders.CheckpointWeightLoader(
-            "s3://openpi-assets/checkpoints/pi05_base/params"
+            "/home/ubuntu/openpi/checkpoints/pi05_base_arx5_lora/bi_arx5_pick_and_place_cube/19999/params"
         ),
-        num_train_steps=20_000,
+        # weight_loader=weight_loaders.CheckpointWeightLoader(
+        #     "s3://openpi-assets/checkpoints/pi05_base/params"
+        # ),
+        num_train_steps=10_000,  # 20000
         num_workers=2,  # default 2
         fsdp_devices=1,  # refer line 359
     ),

@@ -322,6 +322,11 @@ We will collect common issues and their solutions here. If you encounter an issu
 | Action dimensions mismatch                | Verify your data processing transforms match the expected input/output dimensions of your robot. Check the action space definitions in your policy classes.                                  |
 | Diverging training loss                            | Check the `q01`, `q99`, and `std` values in `norm_stats.json` for your dataset. Certain dimensions that are rarely used can end up with very small `q01`, `q99`, or `std` values, leading to huge states and actions after normalization. You can manually adjust the norm stats as a workaround. |
 
+### Training on BiARX5
+
+```bash local datasets mode
+export HF_HUB_OFFLINE=1 && export HF_DATASETS_OFFLINE=1 && echo "Offline mode enabled"
+export HF_DATASETS_CACHE=/home/ubuntu/.cache/huggingface/datasets && echo "HF_DATASETS_CACHE set to: $HF_DATASETS_CACHE"
 
 python scripts/compute_norm_stats.py --config-name pi05_base_arx5_lora
-XLA_PYTHON_CLIENT_MEM_FRACTION=0.9 python scripts/train.py pi05_base_arx5_lora --exp-name=bi_arx5_pick_and_place_cube
+XLA_PYTHON_CLIENT_MEM_FRACTION=0.9 python scripts/train.py pi05_base_arx5_lora --exp-name=bi_arx5_pick_and_place_cube_30k --overwrite / --resume
