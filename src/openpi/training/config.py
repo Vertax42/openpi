@@ -909,7 +909,7 @@ _CONFIGS = [
         weight_loader=weight_loaders.CheckpointWeightLoader(
             "s3://openpi-assets/checkpoints/pi05_base/params"
         ),
-        num_train_steps=20_000,  # 20000
+        num_train_steps=40_000,  # 20000
         num_workers=2,  # default 2
         fsdp_devices=1,  # refer line 359
     ),

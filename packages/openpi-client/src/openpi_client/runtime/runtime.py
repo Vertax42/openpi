@@ -67,6 +67,10 @@ class Runtime:
             # Sleep to maintain the desired frame rate
             now = time.time()
             dt = now - last_step_time
+
+            # 打印dt
+            logging.info(f"dt={dt*1000:.2f}ms")
+
             if dt < step_time:
                 time.sleep(step_time - dt)
                 last_step_time = time.time()
@@ -87,6 +91,7 @@ class Runtime:
             subscriber.on_step(observation, action)
 
         if self._environment.is_episode_complete() or (
-            self._max_episode_steps > 0 and self._episode_steps >= self._max_episode_steps
+            self._max_episode_steps > 0
+            and self._episode_steps >= self._max_episode_steps
         ):
             self.mark_episode_complete()

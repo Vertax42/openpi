@@ -333,4 +333,4 @@ python scripts/compute_norm_stats.py --config-name pi05_base_arx5_lora
 XLA_PYTHON_CLIENT_MEM_FRACTION=0.9 python scripts/train.py pi05_base_arx5_lora --exp-name=bi_arx5_pick_and_place_cube --overwrite / --resume
 
 ```bash
-python scripts/serve_policy.py policy:checkpoint --policy.config=pi05_base_arx5_lora --policy.dir=checkpoints/pi05_base_arx5_lora/bi_arx5_pick_and_place_cube/19999
+python scripts/serve_policy.py --default-prompt='pick and place cube' policy:checkpoint --policy.config=pi05_base_arx5_lora --policy.dir=checkpoints/pi05_base_arx5_lora/bi_arx5_pick_and_place_cube/19999
