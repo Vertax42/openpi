@@ -325,12 +325,23 @@ We will collect common issues and their solutions here. If you encounter an issu
 ### Training on BiARX5
 
 ```bash 
+
+tmux new -s training
 # local datasetsmode
 export HF_HUB_OFFLINE=1 && export HF_DATASETS_OFFLINE=1 && echo "Offline mode enabled"
 export HF_DATASETS_CACHE=/home/ubuntu/.cache/huggingface/datasets && echo "HF_DATASETS_CACHE set to: $HF_DATASETS_CACHE"
 
-python scripts/compute_norm_stats.py --config-name pi05_base_arx5_lora
-XLA_PYTHON_CLIENT_MEM_FRACTION=0.9 python scripts/train.py pi05_base_arx5_lora --exp-name=bi_arx5_pick_and_place_cube --overwrite / --resume
+export NCCL_P2P_DISABLE=1
+export NCCL_SHM_DISABLE=1
+export NCCL_IB_DISABLE=1
+export NCCL_NET_GDR_LEVEL=0
+export NCCL_TOPO_FILE=/dev/null
+export CUDA_VISIBLE_DEVICES=0,1
+
+torchrun --standalone --nnodes=1 --nproc_per_node=2 scripts/train_pytorch.py pi05_base_arx5_full --exp-name=xense_bi_arx5_pick_and_place_cube_full --resume
+
+python scripts/compute_norm_stats.py --config-name pi05_base_arx5_full
+XLA_PYTHON_CLIENT_MEM_FRACTION=0.9 python scripts/train_pytorch.py pi05_base_arx5_full --exp-name=xense_bi_arx5_pick_and_place_cube_full --overwrite / --resume
 
 ```bash
 python scripts/serve_policy.py policy:checkpoint --policy.config=pi05_base_arx5_lora --policy.dir=checkpoints/pi05_base_arx5_lora/bi_arx5_pick_and_place_cube/19999

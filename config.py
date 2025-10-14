@@ -919,7 +919,7 @@ _CONFIGS = [
             pi05=True,
         ),
         data=LeRobotAlohaDataConfig(
-            repo_id="Vertax/xense_bi_arx5_pick_and_place_cube",  # your datasets repo_id
+            repo_id="Vertax/bi_arx5_pick_and_place_cube",  # your datasets repo_id
             adapt_to_pi=False,
             repack_transforms=_transforms.Group(
                 inputs=[
