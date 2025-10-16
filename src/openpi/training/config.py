@@ -873,10 +873,10 @@ _CONFIGS = [
         ),
         data=LeRobotAlohaDataConfig(
             repo_id="Vertax/bi_arx5_pick_and_place_cube",  # your datasets repo_id
-            assets=AssetsConfig(
-                assets_dir="gs://openpi-assets/checkpoints/pi05_base/assets",
-                asset_id="trossen",
-            ),
+            # assets=AssetsConfig(
+            #     assets_dir="gs://openpi-assets/checkpoints/pi05_base/assets",
+            #     asset_id="trossen",
+            # ),
             adapt_to_pi=False,
             repack_transforms=_transforms.Group(
                 inputs=[
@@ -942,13 +942,13 @@ _CONFIGS = [
                 prompt_from_task=True,  # Set to True for prompt by task_name
             ),
         ),
-        batch_size=32,  # the total batch_size not pre_gpu batch_size
+        batch_size=64,  # the total batch_size not pre_gpu batch_size
         weight_loader=weight_loaders.CheckpointWeightLoader(
             "s3://openpi-assets/checkpoints/pi05_base/params"
         ),
         num_train_steps=20_000,  # 20000
         num_workers=2,  # default 2
-        fsdp_devices=2,  # refer line 359
+        fsdp_devices=1,  # refer line 359
     ),
     TrainConfig(
         name="pi05_base_aloha_lora",

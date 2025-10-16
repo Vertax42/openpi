@@ -341,10 +341,12 @@ export CUDA_VISIBLE_DEVICES=0,1
 torchrun --standalone --nnodes=1 --nproc_per_node=2 scripts/train_pytorch.py pi05_base_arx5_full --exp-name=xense_bi_arx5_pick_and_place_cube_full --resume ; shutdown -h +5
 
 python scripts/compute_norm_stats.py --config-name pi05_base_arx5_full
-XLA_PYTHON_CLIENT_MEM_FRACTION=0.9 python scripts/train_pytorch.py pi05_base_arx5_full --exp-name=xense_bi_arx5_pick_and_place_cube_full --overwrite / --resume
+XLA_PYTHON_CLIENT_MEM_FRACTION=0.9 python scripts/train_pytorch.py pi05_base_arx5_full --exp-name=xense_bi_arx5_pick_and_place_cube --overwrite / --resume
 
 ```bash
 python scripts/serve_policy.py policy:checkpoint --policy.config=pi05_base_arx5_lora --policy.dir=checkpoints/pi05_base_arx5_lora/bi_arx5_pick_and_place_cube/19999
+
+python scripts/serve_policy.py policy:checkpoint --policy.config=pi05_base_arx5_full --policy.dir=checkpoints/pi05_base_arx5_full/xense_bi_arx5_pick_and_place_cube_full/20000
 
 192.168.1.165:8000
 vertax@Jarvis:~$ nc -zv 192.168.1.165 8000
