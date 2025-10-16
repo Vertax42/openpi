@@ -56,8 +56,8 @@ class BiARX5RealEnv:
             log_level=log_level,
             use_multithreading=use_multithreading,
             inference_mode=True,  # 推理模式，设置合适的 preview_time
-            controller_dt=0.01,  # 100Hz 控制频率
-            preview_time=0.0,  # 推理模式下的预览时间（15ms）
+            controller_dt=0.002,  # 1ms = 1000Hz 底层控制频率
+            preview_time=0.02,  # 20ms 预览时间
         )
 
         # 创建机器人实例 - 使用你现有的 BiARX5 类
@@ -164,6 +164,11 @@ class BiARX5RealEnv:
         for i in range(6):
             action_dict[f"right_joint_{i+1}.pos"] = float(action[7 + i])
         action_dict["right_gripper.pos"] = float(action[13])
+        # print(
+        #     "gripper_action",
+        #     action_dict["left_gripper.pos"],
+        #     action_dict["right_gripper.pos"],
+        # )
 
         # 发送动作到你的 BiARX5 机器人
         try:

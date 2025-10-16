@@ -15,7 +15,12 @@ class WebsocketClientPolicy(_base_policy.BasePolicy):
     See WebsocketPolicyServer for a corresponding server implementation.
     """
 
-    def __init__(self, host: str = "0.0.0.0", port: Optional[int] = None, api_key: Optional[str] = None) -> None:
+    def __init__(
+        self,
+        host: str = "0.0.0.0",
+        port: Optional[int] = None,
+        api_key: Optional[str] = None,
+    ) -> None:
         self._uri = f"ws://{host}"
         if port is not None:
             self._uri += f":{port}"
@@ -30,9 +35,16 @@ class WebsocketClientPolicy(_base_policy.BasePolicy):
         logging.info(f"Waiting for server at {self._uri}...")
         while True:
             try:
-                headers = {"Authorization": f"Api-Key {self._api_key}"} if self._api_key else None
+                headers = (
+                    {"Authorization": f"Api-Key {self._api_key}"}
+                    if self._api_key
+                    else None
+                )
                 conn = websockets.sync.client.connect(
-                    self._uri, compression=None, max_size=None, additional_headers=headers
+                    self._uri,
+                    compression=None,
+                    max_size=None,
+                    additional_headers=headers,
                 )
                 metadata = msgpack_numpy.unpackb(conn.recv())
                 return conn, metadata

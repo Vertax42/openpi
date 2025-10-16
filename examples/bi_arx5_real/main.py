@@ -115,10 +115,10 @@ class Args:
     host: str = "0.0.0.0"
     port: int = 8000
 
-    action_horizon: int = 25
+    action_horizon: int = 50  # 匹配 Pi0.5 模型的 action_horizon
 
     num_episodes: int = 1
-    max_episode_steps: int = 1000
+    max_episode_steps: int = 10000
 
     # bi_arx5 specific configs (基于 ARX5 SDK，无ROS)
     left_arm_port: str = "can1"
