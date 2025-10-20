@@ -25,6 +25,8 @@ class BiARX5RealEnvironment(_environment.Environment):
         render_height: int = 224,
         render_width: int = 224,
         setup_robot: bool = True,  # 是否立即连接机器人硬件
+        controller_dt: float = 0.002,  # 底层控制频率 (秒)
+        preview_time: float = 0.02,  # 预览时间 (秒)
     ) -> None:
         self._env = _real_env.make_bi_arx5_real_env(
             left_arm_port=left_arm_port,
@@ -33,6 +35,8 @@ class BiARX5RealEnvironment(_environment.Environment):
             use_multithreading=use_multithreading,
             reset_position=reset_position,
             setup_robot=setup_robot,  # 传递 setup_robot 参数
+            controller_dt=controller_dt,  # 传递控制频率参数
+            preview_time=preview_time,  # 传递预览时间参数
         )
         self._render_height = render_height
         self._render_width = render_width
