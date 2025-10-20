@@ -344,7 +344,7 @@ python scripts/compute_norm_stats.py --config-name pi05_base_arx5_full
 XLA_PYTHON_CLIENT_MEM_FRACTION=0.9 python scripts/train_pytorch.py pi05_base_arx5_full --exp-name=xense_bi_arx5_pick_and_place_cube --overwrite / --resume
 
 ```bash
-python scripts/serve_policy.py policy:checkpoint --policy.config=pi05_base_arx5_lora --policy.dir=checkpoints/pi05_base_arx5_lora/bi_arx5_pick_and_place_cube/19999
+python scripts/serve_policy.py --default-prompt="pick rgb cubes and place them into the blue box" policy:checkpoint --policy.config=pi05_base_arx5_lora --policy.dir=checkpoints/pi05_base_arx5_lora/xense_bi_arx5_pick_and_place_cube_arx5_assets/33000
 
 python scripts/serve_policy.py policy:checkpoint --policy.config=pi05_base_arx5_full --policy.dir=checkpoints/pi05_base_arx5_full/xense_bi_arx5_pick_and_place_cube_full/20000
 

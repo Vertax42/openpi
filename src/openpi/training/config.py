@@ -15,9 +15,11 @@ import tyro
 
 import openpi.models.model as _model
 import openpi.models.pi0_config as pi0_config
+import openpi.models.pi0_tactile_config as pi0_tactile_config
 import openpi.models.pi0_fast as pi0_fast
 import openpi.models.tokenizer as _tokenizer
 import openpi.policies.aloha_policy as aloha_policy
+import openpi.policies.aloha_tactile_policy as aloha_tactile_policy
 import openpi.policies.droid_policy as droid_policy
 import openpi.policies.libero_policy as libero_policy
 import openpi.shared.download as _download
@@ -287,6 +289,65 @@ class LeRobotAlohaDataConfig(DataConfigFactory):
     ) -> DataConfig:
         data_transforms = _transforms.Group(
             inputs=[aloha_policy.AlohaInputs(adapt_to_pi=self.adapt_to_pi)],
+            outputs=[aloha_policy.AlohaOutputs(adapt_to_pi=self.adapt_to_pi)],
+        )
+        if self.use_delta_joint_actions:
+            delta_action_mask = _transforms.make_bool_mask(6, -1, 6, -1)
+            data_transforms = data_transforms.push(
+                inputs=[_transforms.DeltaActions(delta_action_mask)],
+                outputs=[_transforms.AbsoluteActions(delta_action_mask)],
+            )
+
+        model_transforms = ModelTransformFactory(default_prompt=self.default_prompt)(
+            model_config
+        )
+
+        return dataclasses.replace(
+            self.create_base_config(assets_dirs, model_config),
+            repack_transforms=self.repack_transforms,
+            data_transforms=data_transforms,
+            model_transforms=model_transforms,
+            action_sequence_keys=self.action_sequence_keys,
+        )
+
+
+@dataclasses.dataclass(frozen=True)
+class LeRobotAlohaTactileDataConfig(DataConfigFactory):
+    """Data config for Aloha with tactile sensors."""
+
+    use_delta_joint_actions: bool = True
+    default_prompt: str | None = None
+    adapt_to_pi: bool = True
+    repack_transforms: tyro.conf.Suppress[_transforms.Group] = dataclasses.field(
+        default=_transforms.Group(
+            inputs=[
+                _transforms.RepackTransform(
+                    {
+                        "images": {
+                            "cam_high": "observation.images.head",
+                            "cam_left_wrist": "observation.images.left_wrist",
+                            "cam_right_wrist": "observation.images.right_wrist",
+                            "cam_left_tactile": "observation.images.left_tactile_0",
+                            "cam_right_tactile": "observation.images.right_tactile_0",
+                        },
+                        "state": "observation.state",
+                        "actions": "action",
+                        "prompt": "prompt",
+                    }
+                )
+            ]
+        )
+    )
+    action_sequence_keys: Sequence[str] = ("action",)
+
+    @override
+    def create(
+        self, assets_dirs: pathlib.Path, model_config: _model.BaseModelConfig
+    ) -> DataConfig:
+        data_transforms = _transforms.Group(
+            inputs=[
+                aloha_tactile_policy.AlohaTactileInputs(adapt_to_pi=self.adapt_to_pi)
+            ],
             outputs=[aloha_policy.AlohaOutputs(adapt_to_pi=self.adapt_to_pi)],
         )
         if self.use_delta_joint_actions:
@@ -863,6 +924,87 @@ _CONFIGS = [
             "gs://openpi-assets/checkpoints/pi0_base/params"
         ),
         num_train_steps=20_000,
+    ),
+    TrainConfig(
+        name="pi05_base_arx5_tie_shoes_lora",
+        model=pi0_config.Pi0Config(
+            paligemma_variant="gemma_2b_lora",
+            action_expert_variant="gemma_300m_lora",
+            pi05=True,
+        ),
+        data=LeRobotAlohaDataConfig(
+            repo_id="Vertax/xense_bi_arx5_tie_shoelaces",  # your datasets repo_id
+            # assets=AssetsConfig(
+            #     assets_dir="gs://openpi-assets/checkpoints/pi05_base/assets",
+            #     asset_id="trossen",
+            # ),
+            adapt_to_pi=False,
+            repack_transforms=_transforms.Group(
+                inputs=[
+                    _transforms.RepackTransform(
+                        {
+                            "images": {
+                                "cam_high": "observation.images.head",
+                                "cam_left_wrist": "observation.images.left_wrist",
+                                "cam_right_wrist": "observation.images.right_wrist",
+                            },
+                            "state": "observation.state",
+                            "actions": "action",
+                            "prompt": "prompt",
+                        }
+                    )
+                ]
+            ),
+            base_config=DataConfig(
+                # local_files_only=True,  # Set to True for local-only datasets.
+                prompt_from_task=True,  # Set to True for prompt by task_name
+            ),
+        ),
+        freeze_filter=pi0_config.Pi0Config(
+            paligemma_variant="gemma_2b_lora", action_expert_variant="gemma_300m_lora"
+        ).get_freeze_filter(),
+        batch_size=64,  # the total batch_size not pre_gpu batch_size
+        # weight_loader=weight_loaders.CheckpointWeightLoader(
+        #     "/home/ubuntu/openpi/checkpoints/pi05_base_arx5_lora/bi_arx5_pick_and_place_cube/19999/params"
+        # ),
+        weight_loader=weight_loaders.CheckpointWeightLoader(
+            "s3://openpi-assets/checkpoints/pi05_base/params"
+        ),
+        num_train_steps=40_000,  # 20000
+        num_workers=2,  # default 2
+        fsdp_devices=1,  # refer line 359
+    ),
+    TrainConfig(
+        name="pi05_base_arx5_tactile_lora",
+        model=pi0_tactile_config.Pi0TactileConfig(
+            paligemma_variant="gemma_2b_lora",
+            action_expert_variant="gemma_300m_lora",
+            pi05=True,
+            # freeze_visual_encoder=True,  # Freeze pretrained visual encoder
+        ),
+        data=LeRobotAlohaTactileDataConfig(
+            repo_id="Vertax/bi_arx5_pick_and_place_cube",
+            # assets=AssetsConfig(
+            #     assets_dir="gs://openpi-assets/checkpoints/pi05_base/assets",
+            #     asset_id="trossen",
+            # ),
+            adapt_to_pi=False,
+            base_config=DataConfig(
+                prompt_from_task=True,
+            ),
+        ),
+        freeze_filter=pi0_tactile_config.Pi0TactileConfig(
+            paligemma_variant="gemma_2b_lora",
+            action_expert_variant="gemma_300m_lora",
+            # freeze_visual_encoder=True,
+        ).get_freeze_filter(),
+        batch_size=64,  # Reduced batch size due to more images (5 vs 3)
+        weight_loader=weight_loaders.CheckpointWeightLoader(
+            "gs://openpi-assets/checkpoints/pi05_base/params"
+        ),
+        num_train_steps=40_000,
+        num_workers=2,
+        fsdp_devices=1,
     ),
     TrainConfig(
         name="pi05_base_arx5_lora",
