@@ -185,3 +185,22 @@ examples/bi_arx5_real/
 ```
 
 The implementation leverages your existing lerobot BiARX5 setup, so no additional robot drivers or ROS components are needed.
+
+
+test time best parameters: 
+action_horizon: 50
+controller_dt: 0.002
+preview_time: 0.04
+max_hz: 20
+default_kp / 2
+default_kd * 2
+- low speed but stable control
+
+test time best parameters: 
+action_horizon: 50
+controller_dt: 0.002
+preview_time: 0.03
+max_hz: 50
+default_kp / 2
+default_kd * 2
+- high speed but low accuracy of control

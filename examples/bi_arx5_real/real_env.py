@@ -41,6 +41,8 @@ class BiARX5RealEnv:
         use_multithreading: bool = True,
         reset_position: Optional[List[float]] = None,
         setup_robot: bool = True,
+        controller_dt: float = 0.002,  # 底层控制频率 (秒)
+        preview_time: float = 0.02,  # 预览时间 (秒)
     ):
         self._reset_position = (
             reset_position if reset_position else DEFAULT_RESET_POSITION
@@ -56,8 +58,8 @@ class BiARX5RealEnv:
             log_level=log_level,
             use_multithreading=use_multithreading,
             inference_mode=True,  # 推理模式，设置合适的 preview_time
-            controller_dt=0.002,  # 1ms = 1000Hz 底层控制频率
-            preview_time=0.02,  # 20ms 预览时间
+            controller_dt=controller_dt,  # 从参数传入
+            preview_time=preview_time,  # 从参数传入
         )
 
         # 创建机器人实例 - 使用你现有的 BiARX5 类
@@ -205,6 +207,8 @@ def make_bi_arx5_real_env(
     use_multithreading: bool = True,
     reset_position: Optional[List[float]] = None,
     setup_robot: bool = True,
+    controller_dt: float = 0.002,
+    preview_time: float = 0.02,
 ) -> BiARX5RealEnv:
     """创建 BiARX5 真实环境 (基于 lerobot 实现，无ROS版本)"""
     return BiARX5RealEnv(
@@ -214,4 +218,6 @@ def make_bi_arx5_real_env(
         use_multithreading=use_multithreading,
         reset_position=reset_position,
         setup_robot=setup_robot,
+        controller_dt=controller_dt,
+        preview_time=preview_time,
     )
