@@ -55,11 +55,17 @@ class WebsocketPolicyServer:
         while True:
             try:
                 start_time = time.monotonic()
-                obs = msgpack_numpy.unpackb(await websocket.recv())
+                message = await websocket.recv()
+                logger.debug(
+                    f"Received message of size {len(message)} bytes from {websocket.remote_address}"
+                )
+                obs = msgpack_numpy.unpackb(message)
+                logger.debug(f"Unpacked observation keys: {list(obs.keys())}")
 
                 infer_time = time.monotonic()
                 action = self._policy.infer(obs)
                 infer_time = time.monotonic() - infer_time
+                logger.debug(f"Inference took {infer_time * 1000:.2f} ms")
 
                 action["server_timing"] = {
                     "infer_ms": infer_time * 1000,
@@ -75,7 +81,11 @@ class WebsocketPolicyServer:
                 logger.info(f"Connection from {websocket.remote_address} closed")
                 break
             except Exception:
-                await websocket.send(traceback.format_exc())
+                error_msg = traceback.format_exc()
+                logger.error(
+                    f"Error processing request from {websocket.remote_address}: {error_msg}"
+                )
+                await websocket.send(error_msg)
                 await websocket.close(
                     code=websockets.frames.CloseCode.INTERNAL_ERROR,
                     reason="Internal server error. Traceback included in previous frame.",
@@ -83,7 +93,9 @@ class WebsocketPolicyServer:
                 raise
 
 
-def _health_check(connection: _server.ServerConnection, request: _server.Request) -> _server.Response | None:
+def _health_check(
+    connection: _server.ServerConnection, request: _server.Request
+) -> _server.Response | None:
     if request.path == "/healthz":
         return connection.respond(http.HTTPStatus.OK, "OK\n")
     # Continue with the normal request handling.
