@@ -30,6 +30,7 @@ class Policy(BasePolicy):
         transforms: Sequence[_transforms.DataTransformFn] = (),
         output_transforms: Sequence[_transforms.DataTransformFn] = (),
         sample_kwargs: dict[str, Any] | None = None,
+        rtc_kwargs: dict[str, Any] | None = None,
         metadata: dict[str, Any] | None = None,
         pytorch_device: str = "cpu",
         is_pytorch: bool = False,
@@ -65,7 +66,7 @@ class Policy(BasePolicy):
             self._rng = rng or jax.random.key(0)
 
     @override
-    def infer(self, obs: dict, *, noise: np.ndarray | None = None) -> dict:  # type: ignore[misc]
+    def infer(self, obs: dict, *, noise: np.ndarray | None = None, **kwargs) -> dict:  # type: ignore[misc]
         # Make a copy since transformations may modify the inputs in place.
         inputs = jax.tree.map(lambda x: x, obs)
         inputs = self._input_transform(inputs)
@@ -85,6 +86,27 @@ class Policy(BasePolicy):
 
         # Prepare kwargs for sample_actions
         sample_kwargs = dict(self._sample_kwargs)
+
+        # Process additional kwargs (e.g. RTC parameters)
+        for k, v in kwargs.items():
+            # Convert scalars to arrays to avoid recompilation in JAX
+            if isinstance(v, (int, float)):
+                if self._is_pytorch_model:
+                    v = torch.tensor(v).to(self._pytorch_device)
+                else:
+                    v = jnp.asarray(v)
+
+            if isinstance(v, np.ndarray):
+                if self._is_pytorch_model:
+                    v = torch.from_numpy(v).to(self._pytorch_device)
+                    if v.ndim == 2:  # Assuming (chunk, dim) -> (1, chunk, dim)
+                        v = v.unsqueeze(0)
+                else:
+                    v = jnp.asarray(v)
+                    if v.ndim == 2:  # Assuming (chunk, dim) -> (1, chunk, dim)
+                        v = v[np.newaxis, ...]
+            sample_kwargs[k] = v
+
         if noise is not None:
             noise = (
                 torch.from_numpy(noise).to(self._pytorch_device)
@@ -114,7 +136,11 @@ class Policy(BasePolicy):
         else:
             outputs = jax.tree.map(lambda x: np.asarray(x[0, ...]), outputs)
 
+        # Keep a copy of the original actions before output transforms
+        actions_original = outputs["actions"]
+
         outputs = self._output_transform(outputs)
+        outputs["actions_original"] = actions_original
         outputs["policy_timing"] = {
             "infer_ms": model_time * 1000,
         }

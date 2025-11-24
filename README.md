@@ -338,7 +338,7 @@ export NCCL_NET_GDR_LEVEL=0
 export NCCL_TOPO_FILE=/dev/null
 export CUDA_VISIBLE_DEVICES=0,1,2,3
 
-torchrun --nproc_per_node=2 scripts/train_pytorch.py pi05_base_arx5_full --exp-name=xense_bi_arx5_pick_and_place_cube_full --resume ; shutdown -h +5
+torchrun --nproc_per_node=1 scripts/train_pytorch.py pi05_base_arx5_full --exp-name=xense_bi_arx5_pick_and_place_cube_full --resume ; shutdown -h +5
 
 torchrun --nproc_per_node=4 scripts/train_pytorch.py pi05_base_arx5_tie_shoes_full --exp-name=tie_shoes_full_100_episodes_torch --overwrite ; shutdown -h +5
 
@@ -371,12 +371,14 @@ XLA_PYTHON_CLIENT_MEM_FRACTION=0.9 python scripts/train.py tie_shoes_50_episodes
 XLA_PYTHON_CLIENT_MEM_FRACTION=0.9 python scripts/train.py tie_shoes_50_episodes_lora_no_adjust_1101 --exp-name tie_shoes_50_episodes_lora_no_adjust_1103_40000 --resume
 
 python scripts/compute_norm_stats.py --config-name pi05_base_arx5_tie_shoes_full
-XLA_PYTHON_CLIENT_MEM_FRACTION=0.9 python scripts/train.py pi05_base_arx5_tie_shoes_full --exp-name=tie_shoes_full_100_episodes --overwrite / --resume
+XLA_PYTHON_CLIENT_MEM_FRACTION=0.9 python scripts/train.py pi05_base_arx5_tie_shoes_full --exp-name=tie_shoes_full_100_episodes_gpu_test --overwrite / --resume
 
-# test 20251110 lerobot040_test_bi_arx5
-python scripts/compute_norm_stats.py --config-name lerobot040_test_bi_arx5
-XLA_PYTHON_CLIENT_MEM_FRACTION=0.9 python scripts/train.py lerobot040_test_bi_arx5 --exp-name=lerobot040_test_bi_arx5 --overwrite / --resume
+# test 20251111 lerobot040_test_bi_arx5
+python scripts/compute_norm_stats.py pi05_base_full_test
+XLA_PYTHON_CLIENT_MEM_FRACTION=0.9 python scripts/train.py pi05_base_full_test --exp-name=pi05_base_full_test --overwrite / --resume
 
+
+## inference time commands
 copy checkpoints from autodl server to local server
 ```bash
 scp -P 15443 -r root@connect.westd.seetacloud.com:/root/autodl-tmp/openpi/checkpoints/pi05_base_arx5_tie_shoes_full/tie_shoes_full_100_episodes_torch/20000 .
@@ -389,7 +391,7 @@ python scripts/serve_policy.py --default-prompt="pick rgb cubes and place them i
 # tie shoes
 python scripts/serve_policy.py --default-prompt="tie shoelaces" policy:checkpoint --policy.config=pi05_base_arx5_tie_shoes_lora --policy.dir=checkpoints/pi05_base_arx5_tie_shoes_lora/tie_shoes_lora_50_episodes/33000
 
-python scripts/serve_policy.py policy:checkpoint --policy.config=pi05_base_arx5_full --policy.dir=checkpoints/pi05_base_arx5_full/xense_bi_arx5_pick_and_place_cube_full/20000
+python scripts/serve_policy.py policy:checkpoint --policy.config=tie_shoes_50_episodes_lora_no_adjust_1101 --policy.dir=checkpoints/tie_shoes_50_episodes_lora_no_adjust_1101/tie_shoes_50_episodes_lora_no_adjust_1103_40000/16000
 
 192.168.1.165:8000
 vertax@Jarvis:~$ nc -zv 192.168.1.165 8000

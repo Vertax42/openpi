@@ -446,7 +446,7 @@ def make_bool_mask(*dims: int) -> tuple[bool, ...]:
     result = []
     for dim in dims:
         if dim > 0:
-            result.extend([True] * (dim))
+            result.extend([True] * dim)
         else:
             result.extend([False] * (-dim))
     return tuple(result)

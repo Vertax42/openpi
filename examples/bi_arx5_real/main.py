@@ -6,6 +6,7 @@ from typing import Any
 import numpy as np
 import tyro
 from openpi_client import action_chunk_broker
+from openpi_client import rtc_action_chunk_broker
 from openpi_client import websocket_client_policy as _websocket_client_policy
 from openpi_client.runtime import runtime as _runtime
 from openpi_client.runtime.agents import policy_agent as _policy_agent
@@ -132,6 +133,11 @@ class Args:
     # dry run mode: only print policy output, not actually execute action
     dry_run: bool = False
 
+    # RTC config
+    rtc_enabled: bool = False
+    action_queue_size_to_get_new_actions: int = 20
+    execution_horizon: int = 20
+
 
 def main(args: Args) -> None:
     ws_client_policy = _websocket_client_policy.WebsocketClientPolicy(
@@ -166,19 +172,37 @@ def main(args: Args) -> None:
         logging.info("✅ normal mode: action will be executed to robot")
         environment = base_environment
 
-    runtime = _runtime.Runtime(
-        environment=environment,
-        agent=_policy_agent.PolicyAgent(
-            policy=action_chunk_broker.ActionChunkBroker(
-                policy=ws_client_policy,
-                action_horizon=args.action_horizon,
-            )
-        ),
-        subscribers=[],
-        max_hz=args.runtime_hz,  # runtime frequency, unit: Hz
-        num_episodes=args.num_episodes,
-        max_episode_steps=args.max_episode_steps,
-    )
+    if args.rtc_enabled:
+        runtime = _runtime.Runtime(
+            environment=environment,
+            agent=_policy_agent.PolicyAgent(
+                policy=rtc_action_chunk_broker.RTCActionChunkBroker(
+                    policy=ws_client_policy,
+                    frequency_hz=args.runtime_hz,
+                    action_queue_size_to_get_new_actions=args.action_queue_size_to_get_new_actions,
+                    rtc_enabled=args.rtc_enabled,
+                    execution_horizon=args.execution_horizon,
+                )
+            ),
+            subscribers=[],
+            max_hz=args.runtime_hz,  # runtime frequency, unit: Hz
+            num_episodes=args.num_episodes,
+            max_episode_steps=args.max_episode_steps,
+        )
+    else:
+        runtime = _runtime.Runtime(
+            environment=environment,
+            agent=_policy_agent.PolicyAgent(
+                policy=action_chunk_broker.ActionChunkBroker(
+                    policy=ws_client_policy,
+                    action_horizon=args.action_horizon,
+                )
+            ),
+            subscribers=[],
+            max_hz=args.runtime_hz,  # runtime frequency, unit: Hz
+            num_episodes=args.num_episodes,
+            max_episode_steps=args.max_episode_steps,
+        )
 
     def safe_disconnect():
         """safe disconnect robot"""

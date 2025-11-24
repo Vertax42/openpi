@@ -219,7 +219,7 @@ def create_rlds_dataset(
     batch_size: int,
     *,
     shuffle: bool = False,
-) -> Dataset:
+) -> DroidRldsDataset:
     # At the moment, we only support DROID for RLDS datasets.
     return DroidRldsDataset(
         data_dir=data_config.rlds_data_dir,
@@ -308,7 +308,7 @@ def create_data_loader(
         framework: The framework to use ("jax" or "pytorch").
     """
     data_config = config.data.create(config.assets_dirs, config.model)
-    logging.info(f"data_config: {data_config}")
+    logging.info("data_config: {data_config}")
 
     if data_config.rlds_data_dir is not None:
         return create_rlds_data_loader(
