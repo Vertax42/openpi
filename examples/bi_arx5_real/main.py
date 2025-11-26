@@ -128,7 +128,7 @@ class Args:
     controller_dt: float = (
         0.002  # lower controller frequency, unit: second (0.002s = 2ms = 500Hz)
     )
-    preview_time: float = 0.06  # preview time, unit: second (0.02s = 20ms)
+    preview_time: float = 0.05  # preview time, unit: second (0.02s = 20ms)
     runtime_hz: int = 30  # runtime frequency, unit: Hz
     # dry run mode: only print policy output, not actually execute action
     dry_run: bool = False
@@ -136,7 +136,7 @@ class Args:
     # RTC config
     rtc_enabled: bool = False
     # Threshold to request new actions, when action queue size is less than this value, new actions will be requested
-    action_queue_size_to_get_new_actions: int = 20
+    action_queue_size_to_get_new_actions: int = 10
     # Sample action with rtc horizon
     execution_horizon: int = 30
 

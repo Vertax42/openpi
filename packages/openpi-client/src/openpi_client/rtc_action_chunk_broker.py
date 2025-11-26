@@ -112,10 +112,10 @@ class RTCActionChunkBroker(_base_policy.BasePolicy):
                     self._latency_tracker.add(latency)
                     inference_delay_steps = math.ceil(latency / self._time_per_chunk)
 
-                    logger.info(
-                        f"RTC: Inference complete. Round-trip latency: {latency * 1000:.2f} ms. "
-                        f"Delay steps: {inference_delay_steps} (estimated: {estimated_delay_steps})"
-                    )
+                    # logger.info(
+                    #     f"RTC: Inference complete. Round-trip latency: {latency * 1000:.2f} ms. "
+                    #     f"Delay steps: {inference_delay_steps} (estimated: {estimated_delay_steps})"
+                    # )
 
                     # Get actions
                     # Prefer original actions if available (for RTC correctness), else processed actions
@@ -149,12 +149,15 @@ class RTCActionChunkBroker(_base_policy.BasePolicy):
                             "All actions will be discarded! Increase execution_horizon or reduce latency."
                         )
 
+                    merge_start = time.perf_counter()
                     self._action_queue.merge(
                         new_original_actions=original_actions,
                         new_processed_actions=processed_actions,
-                        estimated_delay=inference_delay_steps,
+                        estimated_delay=estimated_delay_steps,
                         action_index_before_inference=action_index_before_inference,
                     )
+                    merge_ms = (time.perf_counter() - merge_start) * 1000
+                    logger.info(f"RTC: Merge total time: {merge_ms:.2f}ms")
 
                     # Signal that first inference is done (queue now has actions)
                     if not self._first_inference_done.is_set():
