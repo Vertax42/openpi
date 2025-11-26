@@ -105,52 +105,121 @@ class ActionQueue:
 
     def merge(
         self,
-        original_actions: np.ndarray,
-        processed_actions: np.ndarray,
-        real_delay: int,
+        new_original_actions: np.ndarray,
+        new_processed_actions: np.ndarray,
+        estimated_delay: int,
         action_index_before_inference: Optional[int] = 0,
     ):
         """Merge new actions into the queue.
 
         Args:
-            original_actions: Unprocessed actions from policy (time_steps, action_dim).
-            processed_actions: Post-processed actions for robot (time_steps, action_dim).
-            real_delay: Number of time steps of inference delay.
+            new_original_actions: Unprocessed actions from policy (time_steps, action_dim).
+            new_processed_actions: Post-processed actions for robot (time_steps, action_dim).
+            real_delay: real delay steps based on current action queue index.
+            estimated_delay: estimated delay steps based on history max inference latency.
             action_index_before_inference: Index before inference started, for validation.
         """
         with self.lock:
-            self._check_delays(real_delay, action_index_before_inference)
+            # self._check_delays(estimated_delay, action_index_before_inference)
 
             if self.rtc_enabled:
+                real_delay = self.get_action_index() - action_index_before_inference
+                logger.info(
+                    f"RTC: Real delay before merge: {real_delay} | "
+                    f"Estimated delay: {estimated_delay}"
+                )
+
                 self._replace_actions_queue(
-                    original_actions, processed_actions, real_delay
+                    new_original_actions,
+                    new_processed_actions,
+                    estimated_delay,
+                    real_delay,
                 )
                 return
 
-            self._append_actions_queue(original_actions, processed_actions)
+            self._append_actions_queue(new_original_actions, new_processed_actions)
 
     def _replace_actions_queue(
         self,
-        original_actions: np.ndarray,
-        processed_actions: np.ndarray,
+        new_original_actions: np.ndarray,
+        new_processed_actions: np.ndarray,
+        estimated_delay: int,
         real_delay: int,
     ):
         """Replace the queue with new actions (RTC mode)."""
-        # Ensure delay doesn't exceed action length
-        start_idx = min(real_delay, len(original_actions))
 
-        self.original_queue = original_actions[start_idx:].copy()
-        self.queue = processed_actions[start_idx:].copy()
+        # Determine start index for new actions based on estimated delay
+        # The model was conditioned on 'estimated_delay', so the new trajectory
+        # is optimized to start smoothly from 'estimated_delay' relative to the
+        # previous snapshot.
+        start_idx = estimated_delay
+
+        # Ensure start_idx doesn't exceed action length
+        start_idx = min(start_idx, len(new_original_actions))
+
+        # Slice the new actions
+        new_original_sliced = new_original_actions[start_idx:].copy()
+        new_processed_sliced = new_processed_actions[start_idx:].copy()
+
+        # Calculate the gap we need to fill using old actions
+        # We are currently at 'real_delay' steps past the snapshot.
+        # The new actions start at 'estimated_delay' steps past the snapshot.
+        # We need to bridge the gap from 'real_delay' to 'estimated_delay'.
+        gap = start_idx - real_delay
+
+        if gap > 0 and self.queue is not None:
+            # We need to continue executing old actions for 'gap' more steps.
+            # These correspond to the next 'gap' items in the current queue.
+
+            # Check if we have enough old actions remaining
+            remaining_len = len(self.queue) - self.last_index
+            take_len = min(gap, remaining_len)
+
+            # Slice remaining old actions
+            fill_processed = self.queue[self.last_index : self.last_index + take_len]
+
+            if self.original_queue is not None:
+                fill_original = self.original_queue[
+                    self.last_index : self.last_index + take_len
+                ]
+            else:
+                # Fallback if original queue missing (shouldn't happen usually)
+                fill_original = fill_processed
+
+            # Prepend the old actions to the new sliced actions
+            new_processed_final = np.concatenate([fill_processed, new_processed_sliced])
+            new_original_final = np.concatenate([fill_original, new_original_sliced])
+
+            # If gap > remaining_len (underflow), we just run out of old actions and jump to new.
+            # This is unavoidable if we ran out of buffer.
+        elif gap < 0:
+            # Case: real_delay > estimated_delay (Underestimation)
+            # We are already past the point where new actions were supposed to start.
+            # We must skip ahead in the new actions to catch up to 'real_delay'.
+            # The slice start should be 'real_delay'.
+
+            catchup_idx = real_delay
+            catchup_idx = min(catchup_idx, len(new_original_actions))
+
+            new_original_final = new_original_actions[catchup_idx:].copy()
+            new_processed_final = new_processed_actions[catchup_idx:].copy()
+        else:
+            # Case: real_delay == estimated_delay (Perfect match)
+            new_original_final = new_original_sliced
+            new_processed_final = new_processed_sliced
+
+        self.original_queue = new_original_final
+        self.queue = new_processed_final
 
         self.last_index = 0
 
     def _append_actions_queue(
-        self, original_actions: np.ndarray, processed_actions: np.ndarray
+        self, new_original_actions: np.ndarray, new_processed_actions: np.ndarray
     ):
         """Append new actions to the queue (non-RTC mode)."""
         if self.queue is None:
-            self.original_queue = original_actions.copy()
-            self.queue = processed_actions.copy()
+            self.original_queue = new_original_actions.copy()
+            self.queue = new_processed_actions.copy()
             return
 
         # Remove consumed actions
@@ -158,21 +227,23 @@ class ActionQueue:
         self.queue = self.queue[self.last_index :]
 
         # Append new actions
-        self.original_queue = np.concatenate([self.original_queue, original_actions])
-        self.queue = np.concatenate([self.queue, processed_actions])
+        self.original_queue = np.concatenate(
+            [self.original_queue, new_original_actions]
+        )
+        self.queue = np.concatenate([self.queue, new_processed_actions])
 
         self.last_index = 0
 
     def _check_delays(
-        self, real_delay: int, action_index_before_inference: Optional[int] = None
+        self, estimated_delay: int, action_index_before_inference: Optional[int] = None
     ):
         """Validate that computed delays match expectations."""
         if action_index_before_inference is None:
             return
 
-        indexes_diff = self.last_index - action_index_before_inference
-        if indexes_diff != real_delay:
+        real_delay = self.last_index - action_index_before_inference
+        if real_delay != estimated_delay:
             logger.warning(
-                f"[ACTION_QUEUE] Indexes diff is not equal to real delay. "
-                f"Indexes diff: {indexes_diff}, real delay: {real_delay}"
+                f"[ACTION_QUEUE] Real delay is not equal to estimated delay. "
+                f"Real delay: {real_delay}, estimated delay: {estimated_delay}"
             )

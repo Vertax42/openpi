@@ -937,7 +937,7 @@ _CONFIGS = [
             pi05=True,
             rtc_config=_rtc_config.RTCConfig(
                 enabled=True,
-                execution_horizon=10,
+                execution_horizon=30,
                 max_guidance_weight=1.0,
                 prefix_attention_schedule=_rtc_config.RTCAttentionSchedule.EXP,
             ),
@@ -1224,6 +1224,12 @@ _CONFIGS = [
             paligemma_variant="gemma_2b_lora",
             action_expert_variant="gemma_300m_lora",
             pi05=True,
+            rtc_config=_rtc_config.RTCConfig(
+                enabled=True,
+                execution_horizon=30,
+                max_guidance_weight=1.0,
+                prefix_attention_schedule=_rtc_config.RTCAttentionSchedule.EXP,
+            ),
         ),
         data=LeRobotAlohaDataConfig(
             repo_id="Vertax/bi_arx5_pick_and_place_cube",  # your datasets repo_id

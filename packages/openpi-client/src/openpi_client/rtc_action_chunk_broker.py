@@ -78,7 +78,7 @@ class RTCActionChunkBroker(_base_policy.BasePolicy):
 
                     if obs is None:
                         # No observation yet, wait a bit
-                        time.sleep(0.01)
+                        time.sleep(0.001)
                         continue
 
                     # Prepare for inference
@@ -87,9 +87,6 @@ class RTCActionChunkBroker(_base_policy.BasePolicy):
                         self._action_queue.get_action_index()
                     )
 
-                    # Get leftover actions for RTC guidance
-                    prev_chunk_left_over = self._action_queue.get_left_over()
-
                     # Estimate inference delay
                     inference_latency = self._latency_tracker.max()
                     estimated_delay_steps = math.ceil(
@@ -97,6 +94,12 @@ class RTCActionChunkBroker(_base_policy.BasePolicy):
                     )
 
                     # Perform inference
+                    logger.info(
+                        f"RTC: Starting new inference. Queue size: {self._action_queue.qsize()}"
+                    )
+
+                    # Get leftover actions for RTC guidance
+                    prev_chunk_left_over = self._action_queue.get_left_over()
                     results = self._policy.infer(
                         obs,
                         prev_chunk_left_over=prev_chunk_left_over,
@@ -108,6 +111,11 @@ class RTCActionChunkBroker(_base_policy.BasePolicy):
                     latency = time.perf_counter() - current_time
                     self._latency_tracker.add(latency)
                     inference_delay_steps = math.ceil(latency / self._time_per_chunk)
+
+                    logger.info(
+                        f"RTC: Inference complete. Round-trip latency: {latency * 1000:.2f} ms. "
+                        f"Delay steps: {inference_delay_steps} (estimated: {estimated_delay_steps})"
+                    )
 
                     # Get actions
                     # Prefer original actions if available (for RTC correctness), else processed actions
@@ -124,10 +132,27 @@ class RTCActionChunkBroker(_base_policy.BasePolicy):
                         continue
 
                     # Merge into queue
+                    # current_index = self._action_queue.get_action_index()
+                    # indexes_diff = current_index - action_index_before_inference
+
+                    # logger.info(
+                    #     f"RTC: Merging actions. Real delay: {inference_delay_steps}, "
+                    #     f"Index before: {action_index_before_inference}, "
+                    #     f"Current index: {current_index}, "
+                    #     f"Index diff: {indexes_diff}"
+                    # )
+
+                    if inference_delay_steps >= len(processed_actions):
+                        logger.error(
+                            f"RTC: CRITICAL - Inference delay ({inference_delay_steps} steps) "
+                            f"exceeds action length ({len(processed_actions)} steps). "
+                            "All actions will be discarded! Increase execution_horizon or reduce latency."
+                        )
+
                     self._action_queue.merge(
-                        original_actions=original_actions,
-                        processed_actions=processed_actions,
-                        real_delay=inference_delay_steps,
+                        new_original_actions=original_actions,
+                        new_processed_actions=processed_actions,
+                        estimated_delay=inference_delay_steps,
                         action_index_before_inference=action_index_before_inference,
                     )
 
@@ -139,7 +164,7 @@ class RTCActionChunkBroker(_base_policy.BasePolicy):
                         self._first_inference_done.set()
                 else:
                     # Sleep to prevent busy waiting
-                    time.sleep(0.005)
+                    time.sleep(0.001)
 
             except Exception as e:
                 logger.error(f"Error in RTC background thread: {e}")
