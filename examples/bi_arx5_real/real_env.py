@@ -160,17 +160,17 @@ class BiARX5RealEnv:
         # 左臂动作 (前7个: 6关节 + 夹爪)
         for i in range(6):
             action_dict[f"left_joint_{i+1}.pos"] = float(action[i])
-        action_dict["left_gripper.pos"] = float(action[6])
+        action_dict["left_gripper.pos"] = float(action[6]) - 0.08  # gripper offset
 
         # 右臂动作 (后7个: 6关节 + 夹爪)
         for i in range(6):
             action_dict[f"right_joint_{i+1}.pos"] = float(action[7 + i])
         action_dict["right_gripper.pos"] = float(action[13])
-        # print(
-        #     "gripper_action",
-        #     action_dict["left_gripper.pos"],
-        #     action_dict["right_gripper.pos"],
-        # )
+        print(
+            "gripper_action",
+            action_dict["left_gripper.pos"],
+            action_dict["right_gripper.pos"],
+        )
 
         # 发送动作到你的 BiARX5 机器人
         try:

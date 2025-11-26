@@ -47,15 +47,15 @@ class DryRunEnvironmentWrapper(_environment.Environment):
         # no need to add it in the client
 
         # print observation summary (simplified version)
-        if self._step_count % 10 == 0:  # print observation summary every 10 steps
-            state = obs.get("state")
-            images = obs.get("images", {})
-            logging.info(f"📊 step {self._step_count} - observation summary:")
-            if state is not None:
-                logging.info(
-                    f"   state dimension: {state.shape}, range: [{state.min():.3f}, {state.max():.3f}]"
-                )
-            logging.info(f"   image count: {len(images)}")
+        # if self._step_count % 10 == 0:  # print observation summary every 10 steps
+        #     state = obs.get("state")
+        #     images = obs.get("images", {})
+        #     logging.info(f"📊 step {self._step_count} - observation summary:")
+        #     if state is not None:
+        #         logging.info(
+        #             f"   state dimension: {state.shape}, range: [{state.min():.3f}, {state.max():.3f}]"
+        #         )
+        #     logging.info(f"   image count: {len(images)}")
 
         return obs
 
@@ -71,41 +71,41 @@ class DryRunEnvironmentWrapper(_environment.Environment):
             logging.info(f"{'─'*80}")
 
             # print detailed action information
-            logging.info(f"action dimension: {actions.shape}")
-            logging.info(f"action type: {actions.dtype}")
-            logging.info(f"action range: [{actions.min():.6f}, {actions.max():.6f}]")
+            # logging.info(f"action dimension: {actions.shape}")
+            # logging.info(f"action type: {actions.dtype}")
+            # logging.info(f"action range: [{actions.min():.6f}, {actions.max():.6f}]")
 
             # print each joint action value
-            joint_names = [
-                "left_joint_1",
-                "left_joint_2",
-                "left_joint_3",
-                "left_joint_4",
-                "left_joint_5",
-                "left_joint_6",
-                "left_gripper",
-                "right_joint_1",
-                "right_joint_2",
-                "right_joint_3",
-                "right_joint_4",
-                "right_joint_5",
-                "right_joint_6",
-                "right_gripper",
-            ]
+            # joint_names = [
+            #     "left_joint_1",
+            #     "left_joint_2",
+            #     "left_joint_3",
+            #     "left_joint_4",
+            #     "left_joint_5",
+            #     "left_joint_6",
+            #     "left_gripper",
+            #     "right_joint_1",
+            #     "right_joint_2",
+            #     "right_joint_3",
+            #     "right_joint_4",
+            #     "right_joint_5",
+            #     "right_joint_6",
+            #     "right_gripper",
+            # ]
 
-            logging.info("\ndetailed action values:")
-            for i, (name, value) in enumerate(zip(joint_names, actions)):
-                logging.info(f"  [{i:2d}] {name:12s}: {value:+.6f} rad")
+            # logging.info("\ndetailed action values:")
+            # for i, (name, value) in enumerate(zip(joint_names, actions)):
+            #     logging.info(f"  [{i:2d}] {name:12s}: {value:+.6f} rad")
 
-            logging.info("\ngripper action:")
-            logging.info(f"  left gripper (index 6):  {actions[6]:.6f}")
-            logging.info(f"  right gripper (index 13): {actions[13]:.6f}")
+            # logging.info("\ngripper action:")
+            # logging.info(f"  left gripper (index 6):  {actions[6]:.6f}")
+            # logging.info(f"  right gripper (index 13): {actions[13]:.6f}")
 
-            logging.info(f"{'─'*80}")
-            logging.info(
-                "⚠️  dry run mode: action intercepted, not actually executed to robot"
-            )
-            logging.info(f"{'─'*80}\n")
+            # logging.info(f"{'─'*80}")
+            # logging.info(
+            #     "⚠️  dry run mode: action intercepted, not actually executed to robot"
+            # )
+            # logging.info(f"{'─'*80}\n")
 
 
 @dataclasses.dataclass
@@ -128,15 +128,17 @@ class Args:
     controller_dt: float = (
         0.002  # lower controller frequency, unit: second (0.002s = 2ms = 500Hz)
     )
-    preview_time: float = 0.03  # preview time, unit: second (0.02s = 20ms)
+    preview_time: float = 0.06  # preview time, unit: second (0.02s = 20ms)
     runtime_hz: int = 30  # runtime frequency, unit: Hz
     # dry run mode: only print policy output, not actually execute action
     dry_run: bool = False
 
     # RTC config
     rtc_enabled: bool = False
+    # Threshold to request new actions, when action queue size is less than this value, new actions will be requested
     action_queue_size_to_get_new_actions: int = 20
-    execution_horizon: int = 20
+    # Sample action with rtc horizon
+    execution_horizon: int = 30
 
 
 def main(args: Args) -> None:

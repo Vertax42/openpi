@@ -344,7 +344,9 @@ class Pi0(_model.BaseModel):
                 prev_chunk_left_over = kwargs.get("prev_chunk_left_over")
                 execution_horizon = kwargs.get("execution_horizon")
                 # Ensure inference_delay is provided when prev_chunk_left_over is present
-
+                logger.info(
+                    "------------------------------RTC ON--------------------------------"
+                )
                 v_t = self.rtc_processor.compute_guidance(
                     x_t=x_t,
                     time=time,
