@@ -115,37 +115,82 @@ class ActionQueue:
         Args:
             new_original_actions: Unprocessed actions from policy (time_steps, action_dim).
             new_processed_actions: Post-processed actions for robot (time_steps, action_dim).
-            real_delay: real delay steps based on current action queue index.
-            estimated_delay: estimated delay steps based on history max inference latency.
-            action_index_before_inference: Index before inference started, for validation.
+            estimated_delay: estimated delay steps passed to model.
+            action_index_before_inference: Index before inference started.
+
+        Note:
+            We use real_delay for truncation to avoid skipping actions:
+            - real_delay = actual steps consumed during inference
+            - Truncating at real_delay ensures no action is skipped
+            - RTC guidance ensures new_actions[real_delay] is smooth with old trajectory
         """
-        # Calculate real_delay outside lock to minimize lock hold time
         real_delay = None
+        truncate_delay = None
         with self.lock:
             if self.rtc_enabled:
                 real_delay = self.get_action_index() - action_index_before_inference
-                self._check_delays(estimated_delay, real_delay)
+                # Use real_delay for truncation to avoid skipping actions
+                # RTC guidance ensures actions near real_delay are smooth
+                truncate_delay = real_delay
                 self._replace_actions_queue(
                     new_original_actions,
                     new_processed_actions,
-                    real_delay,
+                    truncate_delay,
                 )
             else:
                 self._append_actions_queue(new_original_actions, new_processed_actions)
 
         # Log outside lock to avoid blocking get() calls
         if real_delay is not None:
-            logger.info(f"RTC: Real delay before merge: {real_delay}")
+            logger.info(
+                f"RTC: Truncate at {truncate_delay}, "
+                f"estimated={estimated_delay}, real={real_delay}"
+            )
 
     def _replace_actions_queue(
         self,
         new_original_actions: np.ndarray,
         new_processed_actions: np.ndarray,
-        real_delay: int,
+        truncate_delay: int,
     ):
-        """Replace the queue with new actions (RTC mode)."""
-        truncate_idx = real_delay
-        truncate_idx = max(0, min(truncate_idx, len(new_original_actions)))
+        """Replace the queue with new actions (RTC mode).
+
+        Args:
+            truncate_delay: The delay used to truncate actions (should be estimated_delay
+                           that was passed to the model, ensuring consistency).
+        """
+        truncate_idx = max(0, min(truncate_delay, len(new_original_actions)))
+
+        # Debug: Check action continuity at merge point
+        if self.queue is not None and self.last_index > 0:
+            # The action we're about to execute from new queue
+            if truncate_idx < len(new_processed_actions):
+                next_action = new_processed_actions[truncate_idx]
+
+                # Compare with: the action at same position in OLD queue
+                # (this is what RTC guidance aligns to)
+                if self.last_index < len(self.queue):
+                    old_action_at_same_pos = self.queue[self.last_index]
+                    diff_aligned = np.abs(next_action - old_action_at_same_pos)
+                    max_diff_aligned = np.max(diff_aligned)
+                    mean_diff_aligned = np.mean(diff_aligned)
+                    max_diff_dim = np.argmax(diff_aligned)
+                    logger.info(
+                        f"RTC Merge: diff(new[{truncate_idx}] vs old[{self.last_index}]) "
+                        f"max={max_diff_aligned:.4f} (dim {max_diff_dim}), "
+                        f"mean={mean_diff_aligned:.4f}"
+                    )
+
+                # Also compare with last executed action (for reference)
+                last_executed_idx = self.last_index - 1
+                if last_executed_idx >= 0 and last_executed_idx < len(self.queue):
+                    last_action = self.queue[last_executed_idx]
+                    diff_prev = np.abs(next_action - last_action)
+                    max_diff_prev = np.max(diff_prev)
+                    logger.info(
+                        f"RTC Merge: diff(new[{truncate_idx}] vs old[{last_executed_idx}]) "
+                        f"max={max_diff_prev:.4f} (this is the actual jump)"
+                    )
 
         self.original_queue = new_original_actions[truncate_idx:].copy()
         self.queue = new_processed_actions[truncate_idx:].copy()
@@ -171,11 +216,3 @@ class ActionQueue:
         self.queue = np.concatenate([self.queue, new_processed_actions])
 
         self.last_index = 0
-
-    def _check_delays(self, estimated_delay: int, real_delay: int):
-        """Validate that computed delays match expectations."""
-        if real_delay != estimated_delay:
-            logger.warning(
-                f"[ACTION_QUEUE] Real delay is not equal to estimated delay. "
-                f"Real delay: {real_delay}, estimated delay: {estimated_delay}"
-            )

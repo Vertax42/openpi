@@ -122,23 +122,23 @@ class Args:
     log_level: str = "INFO"
     use_multithreading: bool = True
 
-    action_horizon: int = 50  # action_horizon
+    action_horizon: int = 30  # action_horizon for actionchunkbroker
 
     # lower controller config
     controller_dt: float = (
         0.002  # lower controller frequency, unit: second (0.002s = 2ms = 500Hz)
     )
-    preview_time: float = 0.05  # preview time, unit: second (0.02s = 20ms)
-    runtime_hz: int = 30  # runtime frequency, unit: Hz
+    preview_time: float = 0.03  # preview time = 1/runtime_hz, for smooth interpolation
+    runtime_hz: int = 25  # runtime frequency, unit: Hz
     # dry run mode: only print policy output, not actually execute action
     dry_run: bool = False
 
     # RTC config
     rtc_enabled: bool = False
     # Threshold to request new actions, when action queue size is less than this value, new actions will be requested
-    action_queue_size_to_get_new_actions: int = 10
+    action_queue_size_to_get_new_actions: int = 30
     # Sample action with rtc horizon
-    execution_horizon: int = 30
+    execution_horizon: int = 30  # execution_horizon for rtc_action_chunk_broker
 
 
 def main(args: Args) -> None:
