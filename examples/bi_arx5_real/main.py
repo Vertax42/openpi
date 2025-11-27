@@ -128,7 +128,7 @@ class Args:
     controller_dt: float = (
         0.002  # lower controller frequency, unit: second (0.002s = 2ms = 500Hz)
     )
-    preview_time: float = 0.03  # preview time = 1/runtime_hz, for smooth interpolation
+    preview_time: float = 0.04  # preview time = 1/runtime_hz, for smooth interpolation
     runtime_hz: int = 25  # runtime frequency, unit: Hz
     # dry run mode: only print policy output, not actually execute action
     dry_run: bool = False
@@ -136,9 +136,12 @@ class Args:
     # RTC config
     rtc_enabled: bool = False
     # Threshold to request new actions, when action queue size is less than this value, new actions will be requested
-    action_queue_size_to_get_new_actions: int = 30
+    action_queue_size_to_get_new_actions: int = 20
     # Sample action with rtc horizon
     execution_horizon: int = 30  # execution_horizon for rtc_action_chunk_broker
+    # Number of steps to blend between old and new actions at merge point
+    # 0 = no blending (hard switch), 2-3 = smooth transition
+    blend_steps: int = 2
 
 
 def main(args: Args) -> None:
@@ -184,6 +187,7 @@ def main(args: Args) -> None:
                     action_queue_size_to_get_new_actions=args.action_queue_size_to_get_new_actions,
                     rtc_enabled=args.rtc_enabled,
                     execution_horizon=args.execution_horizon,
+                    blend_steps=args.blend_steps,
                 )
             ),
             subscribers=[],

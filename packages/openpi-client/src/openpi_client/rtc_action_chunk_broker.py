@@ -37,6 +37,7 @@ class RTCActionChunkBroker(_base_policy.BasePolicy):
         action_queue_size_to_get_new_actions: int = 20,
         rtc_enabled: bool = True,
         execution_horizon: int = 20,
+        blend_steps: int = 0,
     ):
         self._policy = policy
         self._frequency_hz = frequency_hz
@@ -46,7 +47,9 @@ class RTCActionChunkBroker(_base_policy.BasePolicy):
         )
         self._execution_horizon = execution_horizon
 
-        self._action_queue = ActionQueue(rtc_enabled=rtc_enabled)
+        self._action_queue = ActionQueue(
+            rtc_enabled=rtc_enabled, blend_steps=blend_steps
+        )
         self._latency_tracker = LatencyTracker()
         self._latest_obs: Optional[Dict] = None
         self._latest_obs_lock = threading.Lock()
@@ -212,8 +215,19 @@ class RTCActionChunkBroker(_base_policy.BasePolicy):
                     if real_delay_before_merge > 0:
                         self._last_real_delay = real_delay_before_merge
                     else:
-                        # First inference or edge case: use time-based calculation
-                        self._last_real_delay = inference_delay_steps
+                        # First inference: use a reasonable default, NOT the JIT compilation time
+                        # JIT can take several seconds, which would give a huge inference_delay_steps
+                        # Use a sensible default (e.g., 4 steps) for subsequent inferences
+                        # Only use time-based if it's reasonable (< 10 steps)
+                        if inference_delay_steps <= 10:
+                            self._last_real_delay = inference_delay_steps
+                        else:
+                            # JIT compilation case: use default
+                            self._last_real_delay = 4
+                            logger.info(
+                                f"RTC: First inference took {inference_delay_steps} steps "
+                                f"(likely JIT), using default delay=4 for next inference"
+                            )
 
                     # Signal that first inference is done (queue now has actions)
                     if not self._first_inference_done.is_set():

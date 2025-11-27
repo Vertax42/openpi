@@ -19,17 +19,20 @@ class ActionQueue:
     2. RTC-disabled: Appends new actions to the queue, maintaining continuity
     """
 
-    def __init__(self, rtc_enabled: bool = True):
+    def __init__(self, rtc_enabled: bool = True, blend_steps: int = 0):
         """Initialize the action queue.
 
         Args:
             rtc_enabled: Whether Real-Time Chunking is enabled.
+            blend_steps: Number of steps to blend between old and new actions at merge.
+                        0 = no blending (hard switch), >0 = linear blend over N steps.
         """
         self.queue: Optional[np.ndarray] = None  # Processed actions for robot rollout
         self.original_queue: Optional[np.ndarray] = None  # Original actions for RTC
         self.lock = Lock()
         self.last_index = 0
         self.rtc_enabled = rtc_enabled
+        self.blend_steps = blend_steps
 
     def get(self) -> Optional[np.ndarray]:
         """Get the next action from the queue.
@@ -192,8 +195,33 @@ class ActionQueue:
                         f"max={max_diff_prev:.4f} (this is the actual jump)"
                     )
 
-        self.original_queue = new_original_actions[truncate_idx:].copy()
-        self.queue = new_processed_actions[truncate_idx:].copy()
+        # Get the new actions starting from truncate_idx
+        new_original = new_original_actions[truncate_idx:].copy()
+        new_processed = new_processed_actions[truncate_idx:].copy()
+
+        # Apply blending if enabled and we have old actions
+        if (
+            self.blend_steps > 0
+            and self.queue is not None
+            and self.last_index < len(self.queue)
+        ):
+            # Get remaining old actions
+            old_remaining = self.queue[self.last_index :]
+            blend_len = min(self.blend_steps, len(old_remaining), len(new_processed))
+
+            if blend_len > 0:
+                # Linear blend: alpha goes from 0 to 1 over blend_steps
+                for i in range(blend_len):
+                    alpha = (i + 1) / (blend_len + 1)  # 0 < alpha < 1
+                    new_processed[i] = (1 - alpha) * old_remaining[
+                        i
+                    ] + alpha * new_processed[i]
+                    new_original[i] = (1 - alpha) * self.original_queue[
+                        self.last_index + i
+                    ] + alpha * new_original[i]
+
+        self.original_queue = new_original
+        self.queue = new_processed
         self.last_index = 0
 
     def _append_actions_queue(
