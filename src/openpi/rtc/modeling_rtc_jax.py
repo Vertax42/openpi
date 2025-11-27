@@ -162,7 +162,7 @@ class RTCProcessorJax:
         Computes the guided velocity v_t using RTC.
         """
         # Invert time (PyTorch logic adaptation)
-        tau = 1.0 - time
+        tau = jnp.asarray(1.0 - time)
 
         if prev_chunk_left_over is None:
             # Should be handled by caller, but for safety
@@ -229,15 +229,20 @@ class RTCProcessorJax:
         correction = vjp_fn((err, jnp.zeros_like(v_val)))[0]
 
         # Compute guidance weight
-        max_guidance_weight = self.rtc_config.max_guidance_weight
+        max_guidance_weight = jnp.asarray(self.rtc_config.max_guidance_weight)
 
         squared_one_minus_tau = (1 - tau) ** 2
         inv_r2 = (squared_one_minus_tau + tau**2) / squared_one_minus_tau
 
-        # Avoid div by zero if tau is 0
-        c = jnp.where(tau > 1e-6, (1 - tau) / tau, max_guidance_weight)
+        # Handle division by zero: when tau=0, (1-tau)/tau = inf
+        c = jnp.nan_to_num(
+            (1 - tau) / tau, nan=max_guidance_weight, posinf=max_guidance_weight
+        )
 
         guidance_weight = c * inv_r2
+        guidance_weight = jnp.nan_to_num(
+            guidance_weight, nan=0.0, posinf=max_guidance_weight
+        )
         guidance_weight = jnp.minimum(guidance_weight, max_guidance_weight)
 
         # Final result
