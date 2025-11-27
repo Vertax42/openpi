@@ -1,2 +1,8 @@
 [flake8]
 max-line-length = 120
+# 忽略与 Black 冲突的规则
+extend-ignore = E203, E266, E501, W503
+# E203: whitespace before ':' (Black 会在切片中添加空格)
+# E266: too many leading '#' for block comment
+# E501: line too long (由 Black 处理)
+# W503: line break before binary operator (Black 的风格)

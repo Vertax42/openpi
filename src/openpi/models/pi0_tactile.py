@@ -24,13 +24,13 @@ VISUAL_CAMERAS = ("base_0_rgb", "left_wrist_0_rgb", "right_wrist_0_rgb")
 TACTILE_CAMERAS = ("left_tactile_0_rgb", "right_tactile_0_rgb")
 
 
-class Pi0Tactile(pi0.Pi0):
+class Pi0Tactile(nnx.Module):
     """Pi0 model with tactile image support.
 
     Architecture:
-    - Inherits from Pi0 to reuse most of the logic
-    - Adds a separate SigLIP encoder for tactile images
-    - Concatenates visual and tactile tokens before feeding to LLM
+    - Visual branch (3 cameras): Uses pretrained SigLIP encoder
+    - Tactile branch (2 sensors): Uses plain vit vision encoder (trained from scratch)
+    - Both branches produce tokens that are concatenated before feeding to the LLM
     """
 
     def __init__(self, config: pi0_tactile_config.Pi0TactileConfig, rngs: nnx.Rngs):

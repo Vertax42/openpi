@@ -13,7 +13,7 @@ import jax.numpy as jnp
 from typing_extensions import override
 
 from openpi.models import model as _model
-from openpi.models import pi0_config
+import openpi.models.gemma as _gemma
 from openpi.shared import array_typing as at
 import openpi.shared.nnx_utils as nnx_utils
 
@@ -22,7 +22,7 @@ if TYPE_CHECKING:
 
 
 @dataclasses.dataclass(frozen=True)
-class Pi0TactileConfig(pi0_config.Pi0Config):
+class Pi0TactileConfig(_model.BaseModelConfig):
     """Extended Pi0 config that supports tactile images.
 
     This config adds support for tactile images while maintaining compatibility
@@ -35,10 +35,33 @@ class Pi0TactileConfig(pi0_config.Pi0Config):
     """
 
     # Whether to freeze the visual encoder (recommended when using pretrained weights)
-    freeze_visual_encoder: bool = True
+    dtype: str = "bfloat16"
+    paligemma_variant: _gemma.Variant = "gemma_2b"
+    action_expert_variant: _gemma.Variant = "gemma_300m"
 
-    # Whether to use LoRA for the tactile encoder
-    tactile_encoder_lora: bool = False
+    # Set the model specific defaults.
+    action_dim: int = 32
+    action_horizon: int = 50
+    max_token_len: int = None  # type: ignore
+    # Pi05 has two differences from Pi0:
+    # - the state input is part of the discrete language tokens rather than a continuous input that is part of the suffix
+    # - the action expert uses adaRMSNorm to inject the flow matching timestep
+    pi05: bool = False
+    # This config option is not used directly by the model, but it is read by the ModelTransformFactory.
+    discrete_state_input: bool = None  # type: ignore
+
+    def __post_init__(self):
+        if self.max_token_len is None:
+            object.__setattr__(self, "max_token_len", 200 if self.pi05 else 48)
+        if self.discrete_state_input is None:
+            object.__setattr__(self, "discrete_state_input", self.pi05)
+
+    @property
+    @override
+    def model_type(self) -> _model.ModelType:
+        if self.pi05:
+            return _model.ModelType.PI05_TACTILE
+        return _model.ModelType.PI0_TACTILE
 
     @override
     def create(self, rng: at.KeyArrayLike) -> "Pi0Tactile":

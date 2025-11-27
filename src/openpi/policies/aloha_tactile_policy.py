@@ -14,13 +14,29 @@ import openpi.transforms as transforms
 from openpi.policies import aloha_policy
 
 
+def make_aloha_tactile_example() -> dict:
+    """Create an example input for testing."""
+    return {
+        "images": {
+            "cam_high": np.zeros((3, 224, 224), dtype=np.uint8),
+            "cam_left_wrist": np.zeros((3, 224, 224), dtype=np.uint8),
+            "cam_right_wrist": np.zeros((3, 224, 224), dtype=np.uint8),
+            "cam_left_tactile": np.zeros((3, 224, 224), dtype=np.uint8),
+            "cam_right_tactile": np.zeros((3, 224, 224), dtype=np.uint8),
+        },
+        "state": np.zeros(14, dtype=np.float32),
+        "actions": np.zeros((50, 14), dtype=np.float32),
+        "prompt": "pick up cubes",
+    }
+
+
 @dataclasses.dataclass(frozen=True)
-class AlohaTactileInputs(aloha_policy.AlohaInputs):
-    """Inputs for the Aloha policy with tactile support.
+class AlohaTactileInputs(transforms.DataTransformFn):
+    """Inputs for the Aloha Tactile policy.
 
     Expected inputs:
     - images: dict[name, img] where img is [channel, height, width]
-      - Visual cameras: cam_high, cam_low, cam_left_wrist, cam_right_wrist
+      - Visual cameras: cam_high, cam_left_wrist, cam_right_wrist
       - Tactile sensors: cam_left_tactile, cam_right_tactile
     - state: [14]
     - actions: [action_horizon, 14]
@@ -30,7 +46,6 @@ class AlohaTactileInputs(aloha_policy.AlohaInputs):
     EXPECTED_CAMERAS: ClassVar[tuple[str, ...]] = (
         # Visual cameras (standard Aloha)
         "cam_high",
-        "cam_low",
         "cam_left_wrist",
         "cam_right_wrist",
         # Tactile sensors (new)
@@ -39,7 +54,7 @@ class AlohaTactileInputs(aloha_policy.AlohaInputs):
     )
 
     def __call__(self, data: dict) -> dict:
-        data = aloha_policy._decode_aloha(data, adapt_to_pi=self.adapt_to_pi)
+        data = _decode_tactile_aloha(data)
 
         in_images = data["images"]
         if set(in_images) - set(self.EXPECTED_CAMERAS):
@@ -62,6 +77,7 @@ class AlohaTactileInputs(aloha_policy.AlohaInputs):
             "left_wrist_0_rgb": "cam_left_wrist",
             "right_wrist_0_rgb": "cam_right_wrist",
         }
+
         for dest, source in visual_image_names.items():
             if source in in_images:
                 images[dest] = in_images[source]
@@ -75,14 +91,14 @@ class AlohaTactileInputs(aloha_policy.AlohaInputs):
             "left_tactile_0_rgb": "cam_left_tactile",
             "right_tactile_0_rgb": "cam_right_tactile",
         }
+
         for dest, source in tactile_image_names.items():
             if source in in_images:
                 images[dest] = in_images[source]
                 image_masks[dest] = np.True_
             else:
-                # Use black image as placeholder for missing tactile sensors
-                images[dest] = np.zeros_like(base_image)
-                image_masks[dest] = np.False_
+                # Assume tactile images are always present.
+                raise ValueError(f"Tactile image {source} not found in input data")
 
         inputs = {
             "image": images,
@@ -93,9 +109,6 @@ class AlohaTactileInputs(aloha_policy.AlohaInputs):
         # Actions are only available during training
         if "actions" in data:
             actions = np.asarray(data["actions"])
-            actions = aloha_policy._encode_actions_inv(
-                actions, adapt_to_pi=self.adapt_to_pi
-            )
             inputs["actions"] = actions
 
         if "prompt" in data:
@@ -104,17 +117,32 @@ class AlohaTactileInputs(aloha_policy.AlohaInputs):
         return inputs
 
 
-def make_aloha_tactile_example() -> dict:
-    """Create an example input for testing."""
-    return {
-        "images": {
-            "cam_high": np.zeros((3, 224, 224), dtype=np.uint8),
-            "cam_left_wrist": np.zeros((3, 224, 224), dtype=np.uint8),
-            "cam_right_wrist": np.zeros((3, 224, 224), dtype=np.uint8),
-            "cam_left_tactile": np.zeros((3, 224, 224), dtype=np.uint8),
-            "cam_right_tactile": np.zeros((3, 224, 224), dtype=np.uint8),
-        },
-        "state": np.zeros(14, dtype=np.float32),
-        "actions": np.zeros((50, 14), dtype=np.float32),
-        "prompt": "pick cube",
-    }
+@dataclasses.dataclass(frozen=True)
+class AlohaTactileOutputs(transforms.DataTransformFn):
+    """Outputs for the Aloha Tactile policy."""
+
+    # Do Nothing
+
+    def __call__(self, data: dict) -> dict:
+        return {"actions": np.asarray(data["actions"])}
+
+
+def _decode_tactile_aloha(data: dict) -> dict:
+    # state is [left_arm_joint_angles, left_arm_gripper, right_arm_joint_angles, right_arm_gripper]
+    # dim sizes: [6, 1, 6, 1]
+    state = np.asarray(data["state"])
+
+    def convert_image(img):
+        img = np.asarray(img)
+        # Convert to uint8 if using float images.
+        if np.issubdtype(img.dtype, np.floating):
+            img = (255 * img).astype(np.uint8)
+        # Convert from [channel, height, width] to [height, width, channel].
+        return einops.rearrange(img, "c h w -> h w c")
+
+    images = data["images"]
+    images_dict = {name: convert_image(img) for name, img in images.items()}
+
+    data["images"] = images_dict
+    data["state"] = state
+    return data

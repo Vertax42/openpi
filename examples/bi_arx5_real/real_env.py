@@ -166,11 +166,11 @@ class BiARX5RealEnv:
         for i in range(6):
             action_dict[f"right_joint_{i+1}.pos"] = float(action[7 + i])
         action_dict["right_gripper.pos"] = float(action[13])
-        # print(
-        #     "gripper_action",
-        #     action_dict["left_gripper.pos"],
-        #     action_dict["right_gripper.pos"],
-        # )
+        print(
+            "gripper_action",
+            action_dict["left_gripper.pos"],
+            action_dict["right_gripper.pos"],
+        )
 
         # 发送动作到你的 BiARX5 机器人
         try:
@@ -195,6 +195,7 @@ class BiARX5RealEnv:
             logger.info("Disconnecting BiARX5 robot...")
             try:
                 self.robot.disconnect()
+                time.sleep(1)
                 logger.info("BiARX5 robot disconnected")
             except Exception as e:
                 logger.warning(f"Error during BiARX5 disconnect: {e}")

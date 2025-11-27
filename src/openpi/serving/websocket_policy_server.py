@@ -56,16 +56,21 @@ class WebsocketPolicyServer:
             try:
                 start_time = time.monotonic()
                 message = await websocket.recv()
-                logger.debug(
+                logger.info(
                     f"Received message of size {len(message)} bytes from {websocket.remote_address}"
                 )
                 obs = msgpack_numpy.unpackb(message)
-                logger.debug(f"Unpacked observation keys: {list(obs.keys())}")
+                logger.info(f"Unpacked observation keys: {list(obs.keys())}")
 
-                infer_time = time.monotonic()
-                action = self._policy.infer(obs)
-                infer_time = time.monotonic() - infer_time
-                logger.debug(f"Inference took {infer_time * 1000:.2f} ms")
+                # Extract RTC kwargs if present
+                rtc_kwargs = {}
+                if isinstance(obs, dict) and "__rtc_kwargs__" in obs:
+                    rtc_kwargs = obs.pop("__rtc_kwargs__")
+
+                start = time.perf_counter()
+                action = self._policy.infer(obs, **rtc_kwargs)
+                infer_time = time.perf_counter() - start
+                logger.info(f"Inference took {infer_time * 1000:.2f} ms")
 
                 action["server_timing"] = {
                     "infer_ms": infer_time * 1000,

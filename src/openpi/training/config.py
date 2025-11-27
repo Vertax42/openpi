@@ -22,6 +22,7 @@ import openpi.policies.aloha_policy as aloha_policy
 import openpi.policies.aloha_tactile_policy as aloha_tactile_policy
 import openpi.policies.droid_policy as droid_policy
 import openpi.policies.libero_policy as libero_policy
+import openpi.rtc.configuration_rtc as _rtc_config
 import openpi.shared.download as _download
 import openpi.shared.normalize as _normalize
 import openpi.training.droid_rlds_dataset as droid_rlds_dataset
@@ -275,6 +276,9 @@ class LeRobotAlohaDataConfig(DataConfigFactory):
                         "images": {"cam_high": "observation.images.top"},
                         "state": "observation.state",
                         "actions": "action",
+                        # In lerobot v3.0, 'task' field is automatically added when using delta_timestamps
+                        # Map it to 'prompt' for compatibility
+                        "prompt": "task",
                     }
                 )
             ]
@@ -313,11 +317,10 @@ class LeRobotAlohaDataConfig(DataConfigFactory):
 
 @dataclasses.dataclass(frozen=True)
 class LeRobotAlohaTactileDataConfig(DataConfigFactory):
-    """Data config for Aloha with tactile sensors."""
+    """Data config for Aloha Tactile policy."""
 
     use_delta_joint_actions: bool = True
     default_prompt: str | None = None
-    adapt_to_pi: bool = True
     repack_transforms: tyro.conf.Suppress[_transforms.Group] = dataclasses.field(
         default=_transforms.Group(
             inputs=[
@@ -332,7 +335,9 @@ class LeRobotAlohaTactileDataConfig(DataConfigFactory):
                         },
                         "state": "observation.state",
                         "actions": "action",
-                        "prompt": "prompt",
+                        # In lerobot v3.0, 'task' field is automatically added when using delta_timestamps
+                        # Keep both mappings for backward compatibility
+                        "prompt": "task",
                     }
                 )
             ]
@@ -345,10 +350,8 @@ class LeRobotAlohaTactileDataConfig(DataConfigFactory):
         self, assets_dirs: pathlib.Path, model_config: _model.BaseModelConfig
     ) -> DataConfig:
         data_transforms = _transforms.Group(
-            inputs=[
-                aloha_tactile_policy.AlohaTactileInputs(adapt_to_pi=self.adapt_to_pi)
-            ],
-            outputs=[aloha_policy.AlohaOutputs(adapt_to_pi=self.adapt_to_pi)],
+            inputs=[aloha_tactile_policy.AlohaTactileInputs()],
+            outputs=[aloha_tactile_policy.AlohaTactileOutputs()],
         )
         if self.use_delta_joint_actions:
             delta_action_mask = _transforms.make_bool_mask(6, -1, 6, -1)
@@ -932,6 +935,12 @@ _CONFIGS = [
             paligemma_variant="gemma_2b_lora",
             action_expert_variant="gemma_300m_lora",
             pi05=True,
+            rtc_config=_rtc_config.RTCConfig(
+                enabled=True,
+                execution_horizon=30,
+                max_guidance_weight=1.0,
+                prefix_attention_schedule=_rtc_config.RTCAttentionSchedule.EXP,
+            ),
         ),
         data=LeRobotAlohaDataConfig(
             repo_id="Vertax/xense_bi_arx5_tie_shoelaces",  # your datasets repo_id
@@ -1058,20 +1067,31 @@ _CONFIGS = [
         ).get_freeze_filter(),
         batch_size=64,
         weight_loader=weight_loaders.CheckpointWeightLoader(
-            "gs://openpi-assets/checkpoints/pi05_base/params"
+            "/home/ubuntu/openpi/checkpoints/pi05_base_arx5_tie_shoes_high_quality_lora_1027/tie_shoes_lora_20_episodes/29000/params"
         ),
-        num_train_steps=40_000,
+        # weight_loader=weight_loaders.CheckpointWeightLoader(
+        #     "gs://openpi-assets/checkpoints/pi05_base/params"
+        # ),
+        num_train_steps=50_000,
         num_workers=2,
         fsdp_devices=1,
     ),
     TrainConfig(
-        name="pi05_base_arx5_tie_shoes_high_quality_white_full_1028",
+        name="tie_shoes_50_episodes_lora_no_adjust_1101",
         model=pi0_config.Pi0Config(
             action_horizon=30,
+            paligemma_variant="gemma_2b_lora",
+            action_expert_variant="gemma_300m_lora",
             pi05=True,
+            rtc_config=_rtc_config.RTCConfig(
+                enabled=True,
+                execution_horizon=10,
+                max_guidance_weight=1.0,
+                prefix_attention_schedule=_rtc_config.RTCAttentionSchedule.EXP,
+            ),
         ),
         data=LeRobotAlohaDataConfig(
-            repo_id="Vertax/xense_bi_arx5_tie_white_shoelaces_1028",
+            repo_id="Vertax/xense_bi_arx5_tie_white_shoelaces_1030_no_adjust",
             adapt_to_pi=False,
             repack_transforms=_transforms.Group(
                 inputs=[
@@ -1095,15 +1115,108 @@ _CONFIGS = [
         ),
         freeze_filter=pi0_config.Pi0Config(
             action_horizon=30,
+            paligemma_variant="gemma_2b_lora",
+            action_expert_variant="gemma_300m_lora",
             pi05=True,
         ).get_freeze_filter(),
         batch_size=64,
         weight_loader=weight_loaders.CheckpointWeightLoader(
-            "gs://openpi-assets/checkpoints/pi05_base/params"
+            "/home/ubuntu/openpi/checkpoints/tie_shoes_50_episodes_lora_no_adjust_1101/tie_shoes_25_episodes_lora_no_adjust_1101/19999/params"
         ),
         num_train_steps=40_000,
         num_workers=2,
+        fsdp_devices=1,
+    ),
+    TrainConfig(
+        name="tie_shoes_white_lora_finetune_1030_25_episodes",
+        model=pi0_config.Pi0Config(
+            action_horizon=50,
+            paligemma_variant="gemma_2b_lora",
+            action_expert_variant="gemma_300m_lora",
+            pi05=True,
+        ),
+        data=LeRobotAlohaDataConfig(
+            repo_id="Vertax/xense_bi_arx5_tie_white_shoelaces_1030_no_adjust",
+            adapt_to_pi=False,
+            repack_transforms=_transforms.Group(
+                inputs=[
+                    _transforms.RepackTransform(
+                        {
+                            "images": {
+                                "cam_high": "observation.images.head",
+                                "cam_left_wrist": "observation.images.left_wrist",
+                                "cam_right_wrist": "observation.images.right_wrist",
+                            },
+                            "state": "observation.state",
+                            "actions": "action",
+                            "prompt": "prompt",
+                        }
+                    )
+                ]
+            ),
+            base_config=DataConfig(
+                prompt_from_task=True,
+            ),
+        ),
+        freeze_filter=pi0_config.Pi0Config(
+            action_horizon=50,
+            paligemma_variant="gemma_2b_lora",
+            action_expert_variant="gemma_300m_lora",
+            pi05=True,
+        ).get_freeze_filter(),
+        batch_size=64,
+        weight_loader=weight_loaders.CheckpointWeightLoader(
+            "/root//autodl-tmp/openpi/checkpoints/pi05_base_arx5_tie_shoes_high_quality_white_lora_1028/tie_shoes_white_lora/19999/params"
+        ),
+        num_train_steps=20_000,
+        num_workers=44,
         fsdp_devices=4,
+    ),
+    TrainConfig(
+        name="lerobot040_test_bi_arx5",
+        model=pi0_config.Pi0Config(
+            action_horizon=30,
+            paligemma_variant="gemma_2b_lora",
+            action_expert_variant="gemma_300m_lora",
+            pi05=True,
+        ),
+        data=LeRobotAlohaDataConfig(
+            repo_id="Vertax/lerobot040_test_bi_arx5",  # your datasets repo_id
+            adapt_to_pi=False,
+            repack_transforms=_transforms.Group(
+                inputs=[
+                    _transforms.RepackTransform(
+                        {
+                            "images": {
+                                "cam_high": "observation.images.head",
+                                "cam_left_wrist": "observation.images.left_wrist",
+                                "cam_right_wrist": "observation.images.right_wrist",
+                            },
+                            "state": "observation.state",
+                            "actions": "action",
+                            # In lerobot v3.0, 'task' field is automatically added
+                            "prompt": "task",
+                        }
+                    )
+                ]
+            ),
+            base_config=DataConfig(
+                prompt_from_task=False,
+            ),
+        ),
+        freeze_filter=pi0_config.Pi0Config(
+            action_horizon=30,
+            paligemma_variant="gemma_2b_lora",
+            action_expert_variant="gemma_300m_lora",
+            pi05=True,
+        ).get_freeze_filter(),
+        batch_size=64,  # the total batch_size not pre_gpu batch_size
+        weight_loader=weight_loaders.CheckpointWeightLoader(
+            "s3://openpi-assets/checkpoints/pi05_base/params"
+        ),
+        num_train_steps=20_000,  # 20000
+        num_workers=2,  # default 2
+        fsdp_devices=1,  # refer line 359
     ),
     TrainConfig(
         name="pi05_base_arx5_lora",
@@ -1111,6 +1224,12 @@ _CONFIGS = [
             paligemma_variant="gemma_2b_lora",
             action_expert_variant="gemma_300m_lora",
             pi05=True,
+            rtc_config=_rtc_config.RTCConfig(
+                enabled=True,
+                execution_horizon=30,
+                max_guidance_weight=1.0,
+                prefix_attention_schedule=_rtc_config.RTCAttentionSchedule.EXP,
+            ),
         ),
         data=LeRobotAlohaDataConfig(
             repo_id="Vertax/bi_arx5_pick_and_place_cube",  # your datasets repo_id
@@ -1181,19 +1300,19 @@ _CONFIGS = [
         weight_loader=weight_loaders.CheckpointWeightLoader(
             "s3://openpi-assets/checkpoints/pi05_base/params"
         ),
-        num_train_steps=20_000,  # 20000
+        num_train_steps=40_000,  # 20000
         num_workers=2,  # default 2
         fsdp_devices=1,  # refer line 359
     ),
     TrainConfig(
-        name="pi05_base_aloha_lora",
+        name="pi05_base_full_test",
         model=pi0_config.Pi0Config(
-            paligemma_variant="gemma_2b_lora",
-            action_expert_variant="gemma_300m_lora",
+            # paligemma_variant="gemma_2b_lora",
+            # action_expert_variant="gemma_300m_lora",
             pi05=True,
         ),
         data=LeRobotAlohaDataConfig(
-            repo_id="Vertax/place_dual_shoes_demo_clean_arx5_repo",  # your datasets repo_id
+            repo_id="Vertax/xense_bi_arx5_pick_and_place_cube",  # your datasets repo_id
             assets=AssetsConfig(
                 assets_dir="gs://openpi-assets/checkpoints/pi05_base/assets",
                 asset_id="trossen",
@@ -1205,9 +1324,9 @@ _CONFIGS = [
                     _transforms.RepackTransform(
                         {
                             "images": {
-                                "cam_high": "observation.images.cam_high",
-                                "cam_left_wrist": "observation.images.cam_left_wrist",
-                                "cam_right_wrist": "observation.images.cam_right_wrist",
+                                "cam_high": "observation.images.head",
+                                "cam_left_wrist": "observation.images.left_wrist",
+                                "cam_right_wrist": "observation.images.right_wrist",
                             },
                             "state": "observation.state",
                             "actions": "action",
@@ -1221,14 +1340,57 @@ _CONFIGS = [
             ),
         ),
         freeze_filter=pi0_config.Pi0Config(
-            paligemma_variant="gemma_2b_lora", action_expert_variant="gemma_300m_lora"
+            pi05=True,
+            # paligemma_variant="gemma_2b_lora", action_expert_variant="gemma_300m_lora"
         ).get_freeze_filter(),
-        batch_size=64,  # the total batch_size not pre_gpu batch_size
+        batch_size=4,  # the total batch_size not pre_gpu batch_size
         weight_loader=weight_loaders.CheckpointWeightLoader(
-            "s3://openpi-assets/checkpoints/pi05_base/params"
+            "gs://openpi-assets/checkpoints/pi05_base/params"
         ),
         num_train_steps=20_000,
-        num_workers=2,  # default 2
+        num_workers=1,  # default 2
+        fsdp_devices=1,  # refer line 359
+    ),
+    TrainConfig(
+        name="pi05_base_tactile_test",
+        model=pi0_config.Pi0Config(
+            paligemma_variant="gemma_2b_lora",
+            action_expert_variant="gemma_300m_lora",
+            pi05=True,
+        ),
+        data=LeRobotAlohaTactileDataConfig(
+            repo_id="Vertax/lerobot040_test_bi_arx5",  # your datasets repo_id
+            repack_transforms=_transforms.Group(
+                inputs=[
+                    _transforms.RepackTransform(
+                        {
+                            "images": {
+                                "cam_high": "observation.images.head",
+                                "cam_left_wrist": "observation.images.left_wrist",
+                                "cam_right_wrist": "observation.images.right_wrist",
+                            },
+                            "state": "observation.state",
+                            "actions": "action",
+                            "prompt": "prompt",
+                        }
+                    )
+                ]
+            ),
+            base_config=DataConfig(
+                prompt_from_task=True,  # Set to True for prompt by task_name
+            ),
+        ),
+        freeze_filter=pi0_config.Pi0Config(
+            pi05=True,
+            paligemma_variant="gemma_2b_lora",
+            action_expert_variant="gemma_300m_lora",
+        ).get_freeze_filter(),
+        batch_size=8,  # the total batch_size not pre_gpu batch_size
+        weight_loader=weight_loaders.CheckpointWeightLoader(
+            "gs://openpi-assets/checkpoints/pi05_base/params"
+        ),
+        num_train_steps=20_000,
+        num_workers=1,  # default 2
         fsdp_devices=1,  # refer line 359
     ),
     TrainConfig(
@@ -1427,6 +1589,7 @@ _CONFIGS = [
 
 if len({config.name for config in _CONFIGS}) != len(_CONFIGS):
     raise ValueError("Config names must be unique.")
+
 _CONFIGS_DICT = {config.name: config for config in _CONFIGS}
 
 

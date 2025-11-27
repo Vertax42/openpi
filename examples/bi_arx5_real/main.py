@@ -6,6 +6,7 @@ from typing import Any
 import numpy as np
 import tyro
 from openpi_client import action_chunk_broker
+from openpi_client import rtc_action_chunk_broker
 from openpi_client import websocket_client_policy as _websocket_client_policy
 from openpi_client.runtime import runtime as _runtime
 from openpi_client.runtime.agents import policy_agent as _policy_agent
@@ -46,15 +47,15 @@ class DryRunEnvironmentWrapper(_environment.Environment):
         # no need to add it in the client
 
         # print observation summary (simplified version)
-        if self._step_count % 10 == 0:  # print observation summary every 10 steps
-            state = obs.get("state")
-            images = obs.get("images", {})
-            logging.info(f"📊 step {self._step_count} - observation summary:")
-            if state is not None:
-                logging.info(
-                    f"   state dimension: {state.shape}, range: [{state.min():.3f}, {state.max():.3f}]"
-                )
-            logging.info(f"   image count: {len(images)}")
+        # if self._step_count % 10 == 0:  # print observation summary every 10 steps
+        #     state = obs.get("state")
+        #     images = obs.get("images", {})
+        #     logging.info(f"📊 step {self._step_count} - observation summary:")
+        #     if state is not None:
+        #         logging.info(
+        #             f"   state dimension: {state.shape}, range: [{state.min():.3f}, {state.max():.3f}]"
+        #         )
+        #     logging.info(f"   image count: {len(images)}")
 
         return obs
 
@@ -70,41 +71,41 @@ class DryRunEnvironmentWrapper(_environment.Environment):
             logging.info(f"{'─'*80}")
 
             # print detailed action information
-            logging.info(f"action dimension: {actions.shape}")
-            logging.info(f"action type: {actions.dtype}")
-            logging.info(f"action range: [{actions.min():.6f}, {actions.max():.6f}]")
+            # logging.info(f"action dimension: {actions.shape}")
+            # logging.info(f"action type: {actions.dtype}")
+            # logging.info(f"action range: [{actions.min():.6f}, {actions.max():.6f}]")
 
             # print each joint action value
-            joint_names = [
-                "left_joint_1",
-                "left_joint_2",
-                "left_joint_3",
-                "left_joint_4",
-                "left_joint_5",
-                "left_joint_6",
-                "left_gripper",
-                "right_joint_1",
-                "right_joint_2",
-                "right_joint_3",
-                "right_joint_4",
-                "right_joint_5",
-                "right_joint_6",
-                "right_gripper",
-            ]
+            # joint_names = [
+            #     "left_joint_1",
+            #     "left_joint_2",
+            #     "left_joint_3",
+            #     "left_joint_4",
+            #     "left_joint_5",
+            #     "left_joint_6",
+            #     "left_gripper",
+            #     "right_joint_1",
+            #     "right_joint_2",
+            #     "right_joint_3",
+            #     "right_joint_4",
+            #     "right_joint_5",
+            #     "right_joint_6",
+            #     "right_gripper",
+            # ]
 
-            logging.info("\ndetailed action values:")
-            for i, (name, value) in enumerate(zip(joint_names, actions)):
-                logging.info(f"  [{i:2d}] {name:12s}: {value:+.6f} rad")
+            # logging.info("\ndetailed action values:")
+            # for i, (name, value) in enumerate(zip(joint_names, actions)):
+            #     logging.info(f"  [{i:2d}] {name:12s}: {value:+.6f} rad")
 
-            logging.info("\ngripper action:")
-            logging.info(f"  left gripper (index 6):  {actions[6]:.6f}")
-            logging.info(f"  right gripper (index 13): {actions[13]:.6f}")
+            # logging.info("\ngripper action:")
+            # logging.info(f"  left gripper (index 6):  {actions[6]:.6f}")
+            # logging.info(f"  right gripper (index 13): {actions[13]:.6f}")
 
-            logging.info(f"{'─'*80}")
-            logging.info(
-                "⚠️  dry run mode: action intercepted, not actually executed to robot"
-            )
-            logging.info(f"{'─'*80}\n")
+            # logging.info(f"{'─'*80}")
+            # logging.info(
+            #     "⚠️  dry run mode: action intercepted, not actually executed to robot"
+            # )
+            # logging.info(f"{'─'*80}\n")
 
 
 @dataclasses.dataclass
@@ -121,16 +122,26 @@ class Args:
     log_level: str = "INFO"
     use_multithreading: bool = True
 
-    action_horizon: int = 50  # action_horizon
+    action_horizon: int = 30  # action_horizon for actionchunkbroker
 
     # lower controller config
     controller_dt: float = (
         0.002  # lower controller frequency, unit: second (0.002s = 2ms = 500Hz)
     )
-    preview_time: float = 0.03  # preview time, unit: second (0.02s = 20ms)
-    runtime_hz: int = 50  # runtime frequency, unit: Hz
+    preview_time: float = 0.04  # preview time = 1/runtime_hz, for smooth interpolation
+    runtime_hz: int = 25  # runtime frequency, unit: Hz
     # dry run mode: only print policy output, not actually execute action
     dry_run: bool = False
+
+    # RTC config
+    rtc_enabled: bool = False
+    # Threshold to request new actions, when action queue size is less than this value, new actions will be requested
+    action_queue_size_to_get_new_actions: int = 20
+    # Sample action with rtc horizon
+    execution_horizon: int = 30  # execution_horizon for rtc_action_chunk_broker
+    # Number of steps to blend between old and new actions at merge point
+    # 0 = no blending (hard switch), 2-3 = smooth transition
+    blend_steps: int = 2
 
 
 def main(args: Args) -> None:
@@ -166,19 +177,38 @@ def main(args: Args) -> None:
         logging.info("✅ normal mode: action will be executed to robot")
         environment = base_environment
 
-    runtime = _runtime.Runtime(
-        environment=environment,
-        agent=_policy_agent.PolicyAgent(
-            policy=action_chunk_broker.ActionChunkBroker(
-                policy=ws_client_policy,
-                action_horizon=args.action_horizon,
-            )
-        ),
-        subscribers=[],
-        max_hz=args.runtime_hz,  # runtime frequency, unit: Hz
-        num_episodes=args.num_episodes,
-        max_episode_steps=args.max_episode_steps,
-    )
+    if args.rtc_enabled:
+        runtime = _runtime.Runtime(
+            environment=environment,
+            agent=_policy_agent.PolicyAgent(
+                policy=rtc_action_chunk_broker.RTCActionChunkBroker(
+                    policy=ws_client_policy,
+                    frequency_hz=args.runtime_hz,
+                    action_queue_size_to_get_new_actions=args.action_queue_size_to_get_new_actions,
+                    rtc_enabled=args.rtc_enabled,
+                    execution_horizon=args.execution_horizon,
+                    blend_steps=args.blend_steps,
+                )
+            ),
+            subscribers=[],
+            max_hz=args.runtime_hz,  # runtime frequency, unit: Hz
+            num_episodes=args.num_episodes,
+            max_episode_steps=args.max_episode_steps,
+        )
+    else:
+        runtime = _runtime.Runtime(
+            environment=environment,
+            agent=_policy_agent.PolicyAgent(
+                policy=action_chunk_broker.ActionChunkBroker(
+                    policy=ws_client_policy,
+                    action_horizon=args.action_horizon,
+                )
+            ),
+            subscribers=[],
+            max_hz=args.runtime_hz,  # runtime frequency, unit: Hz
+            num_episodes=args.num_episodes,
+            max_episode_steps=args.max_episode_steps,
+        )
 
     def safe_disconnect():
         """safe disconnect robot"""
