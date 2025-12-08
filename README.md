@@ -395,6 +395,9 @@ python scripts/serve_policy.py --default-prompt="tie shoelaces" policy:checkpoin
 
 python scripts/serve_policy.py policy:checkpoint --policy.config=tie_shoes_50_episodes_lora_no_adjust_1101 --policy.dir=checkpoints/tie_shoes_50_episodes_lora_no_adjust_1101/tie_shoes_50_episodes_lora_no_adjust_1103_40000/16000
 
+# pick and place chips
+python scripts/serve_policy.py --default-prompt="pick up a potato chip and place it into the chips container" policy:checkpoint --policy.config=pi05_base_arx5_lora_pick_and_place_chips --policy.dir=checkpoints/pi05_base_arx5_lora_pick_and_place_chips/pi05_base_arx5_lora_pick_and_place_chips_20251204/19999
+
 192.168.1.165:8000
 vertax@Jarvis:~$ nc -zv 192.168.1.165 8000
 Connection to 192.168.1.165 8000 port [tcp/*] succeeded!
