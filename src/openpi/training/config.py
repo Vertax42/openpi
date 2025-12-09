@@ -265,7 +265,7 @@ class LeRobotAlohaDataConfig(DataConfigFactory):
     # If true, this will convert the joint and gripper values from the standard Aloha space to
     # the space used by the pi internal runtime which was used to train the base model. People who
     # use standard Aloha data should set this to true.
-    adapt_to_pi: bool = True
+    adapt_to_pi: bool = False
     adapt_to_arx5: bool = False
     # Repack transforms.
     repack_transforms: tyro.conf.Suppress[_transforms.Group] = dataclasses.field(
@@ -1360,6 +1360,7 @@ _CONFIGS = [
         ),
         data=LeRobotAlohaDataConfig(
             repo_id="Vertax/bi_arx5_pick_and_place_chips",  # your datasets repo_id
+            adapt_to_pi=False,
             repack_transforms=_transforms.Group(
                 inputs=[
                     _transforms.RepackTransform(
