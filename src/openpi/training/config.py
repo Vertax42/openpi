@@ -1269,9 +1269,13 @@ _CONFIGS = [
         fsdp_devices=1,  # refer line 359
     ),
     TrainConfig(
-        name="pi05_base_arx5_full",
+        name="pi05_base_arx5_lora_training_time_rtc",
         model=pi0_config.Pi0Config(
+            paligemma_variant="gemma_2b_lora",
+            action_expert_variant="gemma_300m_lora",
             pi05=True,
+            enable_training_time_rtc=True,
+            max_delay=10,
         ),
         data=LeRobotAlohaDataConfig(
             repo_id="Vertax/xense_bi_arx5_pick_and_place_cube",  # your datasets repo_id
@@ -1296,6 +1300,9 @@ _CONFIGS = [
                 prompt_from_task=True,  # Set to True for prompt by task_name
             ),
         ),
+        freeze_filter=pi0_config.Pi0Config(
+            paligemma_variant="gemma_2b_lora", action_expert_variant="gemma_300m_lora"
+        ).get_freeze_filter(),
         batch_size=64,  # the total batch_size not pre_gpu batch_size
         weight_loader=weight_loaders.CheckpointWeightLoader(
             "s3://openpi-assets/checkpoints/pi05_base/params"
