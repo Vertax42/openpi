@@ -241,7 +241,11 @@ class Pi0(_model.BaseModel):
         *,
         train: bool = False,
     ) -> at.Float[at.Array, "*b ah"]:
-        preprocess_rng, noise_rng, time_rng = jax.random.split(rng, 3)
+        if self._enable_training_time_rtc:
+            preprocess_rng, noise_rng, time_rng, delay_rng = jax.random.split(rng, 4)
+        else:
+            preprocess_rng, noise_rng, time_rng = jax.random.split(rng, 3)
+
         observation = _model.preprocess_observation(
             preprocess_rng, observation, train=train
         )
@@ -274,7 +278,6 @@ class Pi0(_model.BaseModel):
             return jnp.mean(jnp.square(v_t - u_t), axis=-1)
         else:
             b, ah, ad = actions.shape  # (batch_size, action_horizon, action_dim)
-            noise_rng, time_rng, delay_rng = jax.random.split(rng)
             time = jax.random.uniform(time_rng, (b,))
             noise = jax.random.normal(noise_rng, (b, ah, ad))
 
@@ -282,19 +285,29 @@ class Pi0(_model.BaseModel):
             # here, we use Uniform[0, max_delay), as in our real-world experiments
             delay = jax.random.randint(delay_rng, (b,), 0, self._max_delay)
 
-            # set time to 0.0 for the action prefix (Pi0 convention: t=0 is clean actions)
-            # time becomes shape (batch_size, action_horizon)
-            prefix_mask = jnp.arange(ah)[None, :] < delay[:, None]
-            time = jnp.where(prefix_mask, 0.0, time[:, None])
-            # compute the noisy action postfix and run the model
-            x_t = time[:, :, None] * noise + (1 - time[:, :, None]) * actions
+            # Create action prefix mask (True for prefix actions, False for postfix actions)
+            action_prefix_mask = jnp.arange(ah)[None, :] < delay[:, None]
+
+            # Compute x_t: prefix uses clean actions (time=0.0), postfix uses noisy actions
+            # expand time to (b, ah, 1) for broadcasting
+            time_expanded = jnp.where(action_prefix_mask, 0.0, time[:, None])[
+                :, :, None
+            ]
+            x_t = time_expanded * noise + (1 - time_expanded) * actions
             u_t = noise - actions
+
             # one big forward pass of prefix + suffix at once
-            prefix_tokens, prefix_mask, prefix_ar_mask = self.embed_prefix(observation)
-            suffix_tokens, suffix_mask, suffix_ar_mask, adarms_cond = self.embed_suffix(
-                observation, x_t, time
+            prefix_tokens, prefix_input_mask, prefix_ar_mask = self.embed_prefix(
+                observation
             )
-            input_mask = jnp.concatenate([prefix_mask, suffix_mask], axis=1)
+            suffix_tokens, suffix_input_mask, suffix_ar_mask, adarms_cond = (
+                self.embed_suffix(
+                    observation,
+                    x_t,
+                    time,  # time is (b,) - use postfix time for embedding
+                )
+            )
+            input_mask = jnp.concatenate([prefix_input_mask, suffix_input_mask], axis=1)
             ar_mask = jnp.concatenate([prefix_ar_mask, suffix_ar_mask], axis=0)
             attn_mask = make_attn_mask(input_mask, ar_mask)
             positions = jnp.cumsum(input_mask, axis=1) - 1
@@ -308,9 +321,10 @@ class Pi0(_model.BaseModel):
             loss = (v_t - u_t) ** 2
 
             # compute the loss on the postfix only
-            postfix_mask = jnp.logical_not(prefix_mask)[:, :, None]
-            loss = jnp.sum(loss * postfix_mask, axis=-1) / (
-                jnp.sum(postfix_mask, axis=-1) + 1e-8
+            # Use action_prefix_mask (not prefix_input_mask which is for transformer)
+            action_postfix_mask = jnp.logical_not(action_prefix_mask)[:, :, None]
+            loss = jnp.sum(loss * action_postfix_mask, axis=-1) / (
+                jnp.sum(action_postfix_mask, axis=-1) + 1e-8
             )
             return loss
 
@@ -471,14 +485,14 @@ class Pi0(_model.BaseModel):
             x_t, time = carry
 
             # Replace prefix part with action_prefix at each step
+            # This ensures prefix actions are always clean (as observed actions)
             x_t = jnp.where(action_prefix_mask[:, :, None], action_prefix, x_t)
 
-            # Construct time_masked: prefix uses 0.0 (indicating clean actions),
-            # postfix uses current time (Pi0 convention: t=0 is actions, t=1 is noise)
-            time_masked = jnp.where(action_prefix_mask, 0.0, time)
-
+            # Pass scalar time (broadcast to (b,)) to embed_suffix
+            # The time embedding represents the denoising level for the whole sequence
+            # Note: x_t already has clean actions in prefix, noisy in postfix
             suffix_tokens, suffix_mask, suffix_ar_mask, adarms_cond = self.embed_suffix(
-                observation, x_t, time_masked
+                observation, x_t, jnp.broadcast_to(time, (batch_size,))
             )
             # `suffix_attn_mask` is shape (b, suffix_len, suffix_len) indicating how the suffix tokens can attend to each
             # other
