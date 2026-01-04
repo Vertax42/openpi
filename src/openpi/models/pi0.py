@@ -467,10 +467,21 @@ class Pi0(_model.BaseModel):
         )  # shape: (b, remaining_len, ad)
         inference_delay = kwargs.get("inference_delay")  # shape: (b,) or scalar
 
-        if prev_chunk_left_over is None or inference_delay is None:
-            raise ValueError(
-                "training_time_rtc_sample_actions requires 'prev_chunk_left_over' and 'inference_delay' in kwargs"
+        # Handle first inference: if prev_chunk_left_over is None, this is the first inference
+        # Create a dummy prev_chunk and set inference_delay to 0 so it won't be used
+        if prev_chunk_left_over is None:
+            logging.info(
+                "RTC: First inference detected (prev_chunk_left_over is None), "
+                "using dummy prev_chunk with inference_delay=0"
             )
+            prev_chunk_left_over = jnp.zeros(
+                (batch_size, 1, self.action_dim)
+            )  # dummy shape
+            inference_delay = 0  # No prefix constraint for first inference
+
+        if inference_delay is None:
+            logging.warning("RTC: inference_delay is None, defaulting to 0")
+            inference_delay = 0
 
         # Ensure inference_delay has batch dimension (b,)
         # It may come as a scalar from the client

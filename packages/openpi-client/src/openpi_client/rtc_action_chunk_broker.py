@@ -125,6 +125,7 @@ class RTCActionChunkBroker(_base_policy.BasePolicy):
                     )
 
                     # Get leftover actions for RTC guidance
+                    # Server handles None gracefully for first inference
                     prev_chunk_left_over = self._action_queue.get_left_over()
                     if prev_chunk_left_over is not None:
                         logger.info(
