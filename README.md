@@ -402,7 +402,7 @@ python scripts/serve_policy.py policy:checkpoint --policy.config=tie_shoes_50_ep
 python scripts/serve_policy.py --default-prompt="pick up a potato chip and place it into the chips container" policy:checkpoint --policy.config=pi05_base_arx5_lora_pick_and_place_chips --policy.dir=checkpoints/pi05_base_arx5_lora_pick_and_place_chips/pi05_base_arx5_lora_pick_and_place_chips_20251204/19999
 
 192.168.1.165:8000
-vertax@Jarvis:~$ nc -zv 192.168.1.165 8000
-Connection to 192.168.1.165 8000 port [tcp/*] succeeded!
-python -m examples.bi_arx5_real.main     --args.host 192.168.1.165     --args.port 8000     --args.dry_run  --args.enable_tactile_sensors
+vertax@Jarvis:~$ nc -zv 192.168.2.215 8000
+Connection to 192.168.2.215 8000 port [tcp/*] succeeded!
+python -m examples.bi_arx5_real.main     --args.host 192.168.2.215     --args.port 8000     --args.dry_run  --args.enable_tactile_sensors
 
