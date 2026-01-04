@@ -28,6 +28,7 @@ class BiARX5RealEnvironment(_environment.Environment):
         setup_robot: bool = True,  # whether to connect robot hardware immediately
         controller_dt: float = 0.002,  # low-level control frequency (seconds)
         preview_time: float = 0.02,  # preview time (seconds)
+        control_mode: str = "teach_mode",  # control mode for robot
     ) -> None:
         self._env = _real_env.make_bi_arx5_real_env(
             left_arm_port=left_arm_port,
@@ -39,6 +40,7 @@ class BiARX5RealEnvironment(_environment.Environment):
             setup_robot=setup_robot,  # pass setup_robot parameter
             controller_dt=controller_dt,  # pass controller frequency parameter
             preview_time=preview_time,  # pass preview time parameter
+            control_mode=control_mode,  # pass control mode parameter
         )
         self._render_height = render_height
         self._render_width = render_width

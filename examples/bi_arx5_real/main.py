@@ -127,6 +127,7 @@ class Args:
     controller_dt: float = (
         0.002  # lower controller frequency, unit: second (0.002s = 2ms = 500Hz)
     )
+    control_mode: str = "joint_control"
     enable_tactile_sensors: bool = False  # enable tactile sensors, default False
     preview_time: float = 0.04  # preview time = 1/runtime_hz, for smooth interpolation
     runtime_hz: int = 25  # runtime frequency, unit: Hz
@@ -163,6 +164,7 @@ def main(args: Args) -> None:
         reset_position=metadata.get("reset_pose"),
         controller_dt=args.controller_dt,  # pass in lower controller frequency
         preview_time=args.preview_time,  # pass in preview time
+        control_mode=args.control_mode,
     )
 
     # if dry run mode, wrap the environment with the wrapper

@@ -6,7 +6,7 @@ import dm_env
 import numpy as np
 
 # import lerobot bi_arx5 config and make_robot_from_config
-from lerobot.robots.bi_arx5.config_bi_arx5 import BiARX5Config
+from lerobot.robots.bi_arx5.config_bi_arx5 import BiARX5Config, BiARX5ControlMode
 from lerobot.robots.utils import make_robot_from_config
 
 from examples.bi_arx5_real.logger import get_logger
@@ -52,10 +52,14 @@ class BiARX5RealEnv:
         setup_robot: bool = True,
         controller_dt: float = 0.002,  # low-level control frequency (seconds)
         preview_time: float = 0.02,  # preview time (seconds)
+        control_mode: str = "teach_mode",
     ):
         self._reset_position = (
             reset_position if reset_position else DEFAULT_RESET_POSITION
         )
+
+        # convert control_mode string to enum
+        control_mode_enum = BiARX5ControlMode(control_mode)
 
         # create BiARX5 config - directly use lerobot config
         self.config = BiARX5Config(
@@ -70,7 +74,7 @@ class BiARX5RealEnv:
             inference_mode=True,  # inference mode, set appropriate preview_time
             controller_dt=controller_dt,  # pass in controller_dt from parameters
             preview_time=preview_time,  # pass in preview_time from parameters
-            control_mode="teach_mode",
+            control_mode=control_mode_enum,
         )
 
         # create robot instance - use existing BiARX5 class
@@ -122,7 +126,7 @@ class BiARX5RealEnv:
             if lerobot_name in obs:
                 images[openpi_name] = obs[lerobot_name]
             else:
-                logger.warning(f"Camera {lerobot_name} not found in observation")
+                logger.warn(f"Camera {lerobot_name} not found in observation")
 
         return images
 
@@ -239,16 +243,16 @@ class BiARX5RealEnv:
             action_dict[f"right_joint_{i+1}.pos"] = float(action[7 + i])
         action_dict["right_gripper.pos"] = float(action[13])
         # for better gripper control to catch the cubes
-        if (
-            action_dict["left_gripper.pos"] < 0.48
-            and action_dict["left_gripper.pos"] > 0.38
-        ):
-            action_dict["left_gripper.pos"] = 0.4
-        if (
-            action_dict["right_gripper.pos"] < 0.45
-            and action_dict["right_gripper.pos"] > 0.35
-        ):
-            action_dict["right_gripper.pos"] = 0.4
+        # if (
+        #     action_dict["left_gripper.pos"] < 0.48
+        #     and action_dict["left_gripper.pos"] > 0.38
+        # ):
+        #     action_dict["left_gripper.pos"] = 0.4
+        # if (
+        #     action_dict["right_gripper.pos"] < 0.45
+        #     and action_dict["right_gripper.pos"] > 0.35
+        # ):
+        #     action_dict["right_gripper.pos"] = 0.4
 
         # print(
         #     "gripper_action",
@@ -282,7 +286,7 @@ class BiARX5RealEnv:
                 time.sleep(1)
                 logger.info("BiARX5 robot disconnected")
             except Exception as e:
-                logger.warning(f"Error during BiARX5 disconnect: {e}")
+                logger.warn(f"Error during BiARX5 disconnect: {e}")
 
 
 def make_bi_arx5_real_env(
@@ -295,6 +299,7 @@ def make_bi_arx5_real_env(
     setup_robot: bool = True,
     controller_dt: float = 0.002,
     preview_time: float = 0.02,
+    control_mode: str = "teach_mode",
 ) -> BiARX5RealEnv:
     """create BiARX5 real environment (based on lerobot, no ROS version)"""
     return BiARX5RealEnv(
@@ -307,4 +312,5 @@ def make_bi_arx5_real_env(
         setup_robot=setup_robot,
         controller_dt=controller_dt,
         preview_time=preview_time,
+        control_mode=control_mode,
     )
