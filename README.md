@@ -374,7 +374,7 @@ python scripts/compute_norm_stats.py --config-name pi05_base_arx5_tie_shoes_full
 XLA_PYTHON_CLIENT_MEM_FRACTION=0.9 python scripts/train.py pi05_base_arx5_tie_shoes_full --exp-name=tie_shoes_full_100_episodes_gpu_test --overwrite / --resume
 
 # test 20251111 lerobot040_test_bi_arx5
-python scripts/compute_norm_stats.py pi05_base_full_test
+python scripts/compute_norm_stats.py --config-name pi05_base_full_test
 XLA_PYTHON_CLIENT_MEM_FRACTION=0.9 python scripts/train.py pi05_base_full_test --exp-name=pi05_base_full_test --overwrite / --resume
 
 # 20251204 pick and place chips train
@@ -382,6 +382,10 @@ XLA_PYTHON_CLIENT_MEM_FRACTION=0.9 python scripts/train.py pi05_base_arx5_lora_p
 
 # 20251209 training time rtc
 XLA_PYTHON_CLIENT_MEM_FRACTION=0.9 python scripts/train.py pi05_base_arx5_lora_training_time_rtc --exp-name=training_time_rtc_20251209 --overwrite
+
+# 20260105 xense flare open lock
+python scripts/compute_norm_stats.py --config-name pi05_base_xense_flare_open_lock
+XLA_PYTHON_CLIENT_MEM_FRACTION=0.9 python scripts/train.py pi05_base_xense_flare_open_lock --exp-name=xense_flare_open_lock_20260105 --overwrite / --resume
 
 ## inference time commands
 copy checkpoints from autodl server to local server
@@ -403,6 +407,8 @@ python scripts/serve_policy.py --default-prompt="pick up a potato chip and place
 
 # training time RTC
 python scripts/serve_policy.py --default-prompt="pick rgb cubes and place them into the blue box" policy:checkpoint --policy.config=pi05_base_arx5_lora_training_time_rtc --policy.dir=checkpoints/pi05_base_arx5_lora_training_time_rtc/training_time_rtc_20251209/39999
+
+# xense flare open lock 20260105
 
 192.168.1.165:8000
 vertax@Jarvis:~$ nc -zv 192.168.2.215 8000

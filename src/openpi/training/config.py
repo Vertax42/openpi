@@ -22,6 +22,7 @@ import openpi.policies.aloha_policy as aloha_policy
 import openpi.policies.aloha_tactile_policy as aloha_tactile_policy
 import openpi.policies.droid_policy as droid_policy
 import openpi.policies.libero_policy as libero_policy
+import openpi.policies.xense_flare_policy as xense_flare_policy
 import openpi.rtc.configuration_rtc as _rtc_config
 import openpi.shared.download as _download
 import openpi.shared.normalize as _normalize
@@ -556,6 +557,70 @@ class LeRobotDROIDDataConfig(DataConfigFactory):
             repack_transforms=repack_transform,
             data_transforms=data_transforms,
             model_transforms=model_transforms,
+        )
+
+
+@dataclasses.dataclass(frozen=True)
+class LeRobotXenseFlareDataConfig(DataConfigFactory):
+    """
+    Example data config for custom Xense Flare dataset in LeRobot format.
+    """
+
+    gripper_first: bool = True
+
+    use_delta_cartesian_actions: bool = True
+    # If provided, will be injected into the input data if the "prompt" key is not present.
+    default_prompt: str | None = None
+
+    # Repack transforms.
+    repack_transforms: tyro.conf.Suppress[_transforms.Group] = dataclasses.field(
+        default=_transforms.Group(
+            inputs=[
+                _transforms.RepackTransform(
+                    {
+                        "images": {
+                            "observation/wrist_image_left": "observation.images.wrist_cam"
+                        },
+                        "state": "observation.state",
+                        "actions": "action",
+                        "prompt": "task",
+                    }
+                )
+            ]
+        )
+    )
+    # Action keys that will be used to read the action sequence from the dataset.
+    action_sequence_keys: Sequence[str] = ("action",)
+
+    @override
+    def create(
+        self, assets_dirs: pathlib.Path, model_config: _model.BaseModelConfig
+    ) -> DataConfig:
+
+        data_transforms = _transforms.Group(
+            inputs=[
+                xense_flare_policy.XenseFlareInputs(gripper_first=self.gripper_first)
+            ],
+            outputs=[xense_flare_policy.XenseFlareOutputs()],
+        )
+
+        if self.use_delta_cartesian_actions:
+            delta_action_mask = _transforms.make_bool_mask(6, -1)
+            data_transforms = data_transforms.push(
+                inputs=[_transforms.DeltaActions(delta_action_mask)],
+                outputs=[_transforms.AbsoluteActions(delta_action_mask)],
+            )
+
+        model_transforms = ModelTransformFactory(default_prompt=self.default_prompt)(
+            model_config
+        )
+
+        return dataclasses.replace(
+            self.create_base_config(assets_dirs, model_config),
+            repack_transforms=self.repack_transforms,
+            data_transforms=data_transforms,
+            model_transforms=model_transforms,
+            action_sequence_keys=self.action_sequence_keys,
         )
 
 
@@ -1401,72 +1466,51 @@ _CONFIGS = [
         num_workers=1,  # default 2
         fsdp_devices=1,  # refer line 359
     ),
+    #
+    # Fine-tuning XenseFlare configs.
+    #
     TrainConfig(
-        name="pi05_aloha_pen_uncap",
-        model=pi0_config.Pi0Config(pi05=True),
-        data=LeRobotAlohaDataConfig(
-            repo_id="physical-intelligence/aloha_pen_uncap_diverse",
-            assets=AssetsConfig(
-                assets_dir="gs://openpi-assets/checkpoints/pi05_base/assets",
-                asset_id="trossen",
-            ),
-            default_prompt="uncap the pen",
+        name="pi05_base_xense_flare_open_lock",
+        model=pi0_config.Pi0Config(
+            paligemma_variant="gemma_2b_lora",
+            action_expert_variant="gemma_300m_lora",
+            pi05=True,
+        ),
+        data=LeRobotXenseFlareDataConfig(
+            repo_id="Vertax/xense_flare_open_lock_20260105",  # your datasets repo_id
+            gripper_first=True,
+            use_delta_cartesian_actions=True,
+            default_prompt="open the lock with the key",
             repack_transforms=_transforms.Group(
                 inputs=[
                     _transforms.RepackTransform(
                         {
                             "images": {
-                                "cam_high": "observation.images.cam_high",
-                                "cam_left_wrist": "observation.images.cam_left_wrist",
-                                "cam_right_wrist": "observation.images.cam_right_wrist",
+                                "observation/wrist_image_left": "observation.images.wrist_cam"
                             },
                             "state": "observation.state",
                             "actions": "action",
+                            "prompt": "task",
                         }
                     )
                 ]
             ),
+            base_config=DataConfig(
+                prompt_from_task=True,  # Set to True for prompt by task_name
+            ),
         ),
+        freeze_filter=pi0_config.Pi0Config(
+            pi05=True,
+            paligemma_variant="gemma_2b_lora",
+            action_expert_variant="gemma_300m_lora",
+        ).get_freeze_filter(),
+        batch_size=64,  # the total batch_size not pre_gpu batch_size
         weight_loader=weight_loaders.CheckpointWeightLoader(
             "gs://openpi-assets/checkpoints/pi05_base/params"
         ),
         num_train_steps=20_000,
-        batch_size=64,
-    ),
-    #
-    # Fine-tuning DROID configs.
-    #
-    TrainConfig(
-        # This config is for fine-tuning pi0-FAST-base on the *full* DROID dataset.
-        # We use RLDS data loading to make training on this large dataset tractable.
-        # For fine-tuning on your own DROID dataset, see below.
-        name="pi0_fast_full_droid_finetune",
-        model=pi0_fast.Pi0FASTConfig(
-            action_dim=8,
-            action_horizon=16,
-            max_token_len=180,
-        ),
-        data=RLDSDroidDataConfig(
-            repo_id="droid",
-            # Set this to the path to your DROID RLDS dataset (the parent directory of the `droid` directory).
-            rlds_data_dir="<path_to_droid_rlds_dataset>",
-            action_space=droid_rlds_dataset.DroidActionSpace.JOINT_POSITION,
-        ),
-        weight_loader=weight_loaders.CheckpointWeightLoader(
-            "gs://openpi-assets/checkpoints/pi0_fast_base/params"
-        ),
-        lr_schedule=_optimizer.CosineDecaySchedule(
-            warmup_steps=1_000,
-            peak_lr=5e-5,
-            decay_steps=1_000_000,
-            decay_lr=5e-5,
-        ),
-        num_train_steps=100_000,  # 100k steps should be sufficient, takes ~2 days on 8x H100s
-        batch_size=256,
-        log_interval=100,
-        save_interval=5000,
-        keep_period=20_000,
-        num_workers=0,  # Important: RLDS DataLoader requires num_workers=0, handles multi-processing internally
+        num_workers=1,  # default 2
+        fsdp_devices=1,  # refer line 359
     ),
     TrainConfig(
         # This config is for fine-tuning pi05 on the *full* DROID dataset.
