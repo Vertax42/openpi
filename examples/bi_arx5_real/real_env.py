@@ -9,7 +9,7 @@ import numpy as np
 from lerobot.robots.bi_arx5.config_bi_arx5 import BiARX5Config, BiARX5ControlMode
 from lerobot.robots.utils import make_robot_from_config
 
-from examples.bi_arx5_real.logger import get_logger
+from lerobot.utils.robot_utils import get_logger
 
 logger = get_logger("BiARX5RealEnv")
 

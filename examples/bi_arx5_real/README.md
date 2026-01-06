@@ -61,6 +61,7 @@ python examples/bi_arx5_real/test_env.py
 ```
 
 This will:
+
 1. Test environment creation without hardware
 2. Test OpenPI integration compatibility
 3. Optionally test real hardware connection (if you choose)
@@ -107,6 +108,7 @@ The observation space includes:
 ## Camera Configuration
 
 The system expects three cameras configured in your lerobot BiARX5Config:
+
 ```python
 cameras = {
     "head": RealSenseCameraConfig("230322271365", fps=30, width=640, height=480),

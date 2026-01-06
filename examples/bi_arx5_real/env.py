@@ -7,7 +7,7 @@ from openpi_client.runtime import environment as _environment
 from typing_extensions import override
 
 import examples.bi_arx5_real.real_env as _real_env
-from examples.bi_arx5_real.logger import get_logger
+from lerobot.utils.robot_utils import get_logger
 
 logger = get_logger("BiARX5Env")
 
