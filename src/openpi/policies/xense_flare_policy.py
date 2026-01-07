@@ -237,6 +237,33 @@ def _euler_to_quaternion_batch(
     return qw, qx, qy, qz
 
 
+def _ensure_quaternion_continuity(quat: np.ndarray) -> np.ndarray:
+    """Ensure quaternion sign continuity across a sequence.
+
+    Quaternions q and -q represent the same rotation. This function ensures
+    consecutive quaternions are in the same "hemisphere" by flipping signs
+    when needed to maintain continuity.
+
+    Args:
+        quat: Array of shape (horizon, 4) containing [qw, qx, qy, qz]
+
+    Returns:
+        Array of same shape with continuous quaternion signs
+    """
+    if quat.shape[0] <= 1:
+        return quat
+
+    result = quat.copy()
+    for i in range(1, len(result)):
+        # Compute dot product between consecutive quaternions
+        dot = np.dot(result[i - 1], result[i])
+        # If dot product is negative, quaternions are in opposite hemispheres
+        # Flip the sign to maintain continuity
+        if dot < 0:
+            result[i] = -result[i]
+    return result
+
+
 def _rpy_to_quat_array(arr: np.ndarray) -> np.ndarray:
     """Convert roll-pitch-yaw part of actions to quaternion.
 
@@ -262,6 +289,10 @@ def _rpy_to_quat_array(arr: np.ndarray) -> np.ndarray:
         gripper = arr[:, 6:7]  # (horizon, 1)
         qw, qx, qy, qz = _euler_to_quaternion_batch(roll, pitch, yaw)  # each (horizon,)
         quat = np.stack([qw, qx, qy, qz], axis=-1)  # (horizon, 4)
+
+        # Ensure quaternion continuity across the action horizon
+        quat = _ensure_quaternion_continuity(quat)
+
         return np.concatenate([tcp_xyz, quat, gripper], axis=-1)  # (horizon, 8)
 
 
