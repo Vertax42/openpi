@@ -1375,8 +1375,7 @@ _CONFIGS = [
             pi05=True,
         ),
         data=LeRobotXenseFlareDataConfig(
-            repo_id="Vertax/xense_flare_open_lock_20260105",  # your datasets repo_id
-            gripper_first=True,
+            repo_id="Vertax/xense_flare_open_lock_20260108",  # your datasets repo_id
             use_delta_cartesian_actions=True,
             default_prompt="open the lock with the key",
             repack_transforms=_transforms.Group(
