@@ -9,17 +9,16 @@ Usage:
 """
 
 import argparse
+from dataclasses import dataclass
 import logging
 import statistics
 import time
-from dataclasses import dataclass
 
+from lerobot.datasets.lerobot_dataset import LeRobotDataset
+from lerobot.datasets.lerobot_dataset import LeRobotDatasetMetadata
 import torch
-from lerobot.datasets.lerobot_dataset import LeRobotDataset, LeRobotDatasetMetadata
 
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
 
@@ -37,9 +36,7 @@ class BenchmarkResult:
     std_time: float
 
 
-def create_dataset(
-    repo_id: str, video_backend: str | None, action_horizon: int = 30
-) -> LeRobotDataset:
+def create_dataset(repo_id: str, video_backend: str | None, action_horizon: int = 30) -> LeRobotDataset:
     """Create a LeRobotDataset with the specified video backend."""
     logger.info(f"Creating dataset with video_backend={video_backend}")
 
@@ -65,15 +62,11 @@ def benchmark_dataset(
     warmup_samples: int = 10,
 ) -> BenchmarkResult:
     """Benchmark the dataset loading performance."""
-    logger.info(
-        f"Benchmarking {backend_name} backend with {num_samples} samples (warmup: {warmup_samples})"
-    )
+    logger.info(f"Benchmarking {backend_name} backend with {num_samples} samples (warmup: {warmup_samples})")
 
     total_samples = len(dataset)
     if num_samples > total_samples:
-        logger.warning(
-            f"Requested {num_samples} samples but dataset only has {total_samples}. Using all samples."
-        )
+        logger.warning(f"Requested {num_samples} samples but dataset only has {total_samples}. Using all samples.")
         num_samples = total_samples
 
     # Generate random indices for sampling
@@ -170,11 +163,7 @@ def print_comparison(results: dict[str, BenchmarkResult]) -> None:
     # Winner determination
     if len(backends) == 2:
         r1, r2 = results[backends[0]], results[backends[1]]
-        speedup = (
-            r1.samples_per_second / r2.samples_per_second
-            if r2.samples_per_second > 0
-            else float("inf")
-        )
+        speedup = r1.samples_per_second / r2.samples_per_second if r2.samples_per_second > 0 else float("inf")
 
         if speedup > 1:
             winner = backends[0]
@@ -190,9 +179,7 @@ def print_comparison(results: dict[str, BenchmarkResult]) -> None:
 
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="Benchmark video decoding backends for LeRobot datasets"
-    )
+    parser = argparse.ArgumentParser(description="Benchmark video decoding backends for LeRobot datasets")
     parser.add_argument(
         "--repo-id",
         type=str,
@@ -254,9 +241,7 @@ def main():
                 action_horizon=args.action_horizon,
             )
 
-            logger.info(
-                f"Dataset loaded: {len(dataset)} samples, {dataset.num_episodes} episodes"
-            )
+            logger.info(f"Dataset loaded: {len(dataset)} samples, {dataset.num_episodes} episodes")
 
             # Run benchmark
             result = benchmark_dataset(

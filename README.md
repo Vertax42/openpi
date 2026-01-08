@@ -387,6 +387,10 @@ XLA_PYTHON_CLIENT_MEM_FRACTION=0.9 python scripts/train.py pi05_base_arx5_lora_t
 python scripts/compute_norm_stats.py --config-name pi05_base_xense_flare_open_lock
 XLA_PYTHON_CLIENT_MEM_FRACTION=0.9 python scripts/train.py pi05_base_xense_flare_open_lock --exp-name=xense_flare_open_lock_20260105 --overwrite / --resume
 
+# 20260107 xense flare pick and place cube
+python scripts/compute_norm_stats.py --config-name pi05_base_xense_flare_pick_and_place_cube
+XLA_PYTHON_CLIENT_MEM_FRACTION=0.9 python scripts/train.py pi05_base_xense_flare_pick_and_place_cube --exp-name=xense_flare_pick_and_place_cube_20260107 --overwrite / --resume
+
 ## inference time commands
 copy checkpoints from autodl server to local server
 ```bash
@@ -409,6 +413,8 @@ python scripts/serve_policy.py --default-prompt="pick up a potato chip and place
 python scripts/serve_policy.py --default-prompt="pick rgb cubes and place them into the blue box" policy:checkpoint --policy.config=pi05_base_arx5_lora_training_time_rtc --policy.dir=checkpoints/pi05_base_arx5_lora_training_time_rtc/training_time_rtc_20251209/39999
 
 # xense flare open lock 20260105
+python scripts/serve_policy.py --default-prompt="open the lock with the key" policy:checkpoint --policy.config=pi05_base_xense_flare_open_lock --policy.dir=checkpoints/pi05_base_xense_flare_open_lock/xense_flare_open_lock_20260105/19999
+
 
 192.168.1.165:8000
 vertax@Jarvis:~$ nc -zv 192.168.2.215 8000
