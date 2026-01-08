@@ -46,17 +46,13 @@ def _convert_tasks_to_dict(tasks):
         if isinstance(tasks, pd.DataFrame):
             # Create dict: {task_index: task_name}
             # Convert task_index to Python int for full compatibility
-            return {
-                int(row["task_index"]): task_name for task_name, row in tasks.iterrows()
-            }
+            return {int(row["task_index"]): task_name for task_name, row in tasks.iterrows()}
     except ImportError:
         pass
 
     # Fallback: try to convert assuming it has .iterrows() method
     if hasattr(tasks, "iterrows"):
-        return {
-            int(row["task_index"]): task_name for task_name, row in tasks.iterrows()
-        }  # noqa: B023
+        return {int(row["task_index"]): task_name for task_name, row in tasks.iterrows()}
 
     # If all else fails, return as is and let it fail later with better error message
     return tasks
@@ -76,9 +72,7 @@ class IterableDataset(Protocol[T_co]):
     """Interface for an iterable dataset."""
 
     def __iter__(self) -> Iterator[T_co]:
-        raise NotImplementedError(
-            "Subclasses of IterableDataset should implement __iter__."
-        )
+        raise NotImplementedError("Subclasses of IterableDataset should implement __iter__.")
 
     def __len__(self) -> int:
         raise NotImplementedError("Subclasses of Dataset should implement __len__.")
@@ -89,18 +83,14 @@ class DataLoader(Protocol[T_co]):
 
     def data_config(self) -> _config.DataConfig:
         """Get the data config for this data loader."""
-        raise NotImplementedError(
-            "Subclasses of DataLoader should implement data_config."
-        )
+        raise NotImplementedError("Subclasses of DataLoader should implement data_config.")
 
     def __iter__(self) -> Iterator[T_co]:
         raise NotImplementedError("Subclasses of DataLoader should implement __iter__.")
 
 
 class TransformedDataset(Dataset[T_co]):
-    def __init__(
-        self, dataset: Dataset, transforms: Sequence[_transforms.DataTransformFn]
-    ):
+    def __init__(self, dataset: Dataset, transforms: Sequence[_transforms.DataTransformFn]):
         self._dataset = dataset
         self._transform = _transforms.compose(transforms)
 
@@ -131,9 +121,7 @@ class IterableTransformedDataset(IterableDataset[T_co]):
                 batch_size = next(v.shape[0] for v in sample.values())
 
                 # Split batch into individual samples using tree_map
-                individual_samples = [
-                    jax.tree.map(lambda x: x[i], sample) for i in range(batch_size)
-                ]  # noqa: B023
+                individual_samples = [jax.tree.map(lambda x: x[i], sample) for i in range(batch_size)]
 
                 # Transform each sample
                 transformed = [self._transform(s) for s in individual_samples]
@@ -161,9 +149,7 @@ class FakeDataset(Dataset):
             # Remove the batch dimension.
             shape = spec.shape[1:]
             if spec.dtype == jnp.float32:
-                return jax.random.uniform(
-                    data_rng, shape=shape, minval=-1.0, maxval=1.0
-                )
+                return jax.random.uniform(data_rng, shape=shape, minval=-1.0, maxval=1.0)
             if spec.dtype == jnp.int32:
                 return jax.random.randint(data_rng, shape=shape, minval=0, maxval=2048)
             return jnp.zeros(shape=shape, dtype=spec.dtype)
@@ -196,8 +182,7 @@ def create_torch_dataset(
     dataset = lerobot_dataset.LeRobotDataset(
         data_config.repo_id,
         delta_timestamps={
-            key: [t / dataset_meta.fps for t in range(action_horizon)]
-            for key in data_config.action_sequence_keys
+            key: [t / dataset_meta.fps for t in range(action_horizon)] for key in data_config.action_sequence_keys
         },
     )
 
@@ -206,9 +191,7 @@ def create_torch_dataset(
         # In v3.0, tasks is a DataFrame with task names as index and task_index as column
         # We need to convert it to {task_index: task_name} dict format
         tasks_dict = _convert_tasks_to_dict(dataset_meta.tasks)
-        dataset = TransformedDataset(
-            dataset, [_transforms.PromptFromLeRobotTask(tasks_dict)]
-        )
+        dataset = TransformedDataset(dataset, [_transforms.PromptFromLeRobotTask(tasks_dict)])
 
     return dataset
 
@@ -231,9 +214,7 @@ def create_rlds_dataset(
     )
 
 
-def transform_dataset(
-    dataset: Dataset, data_config: _config.DataConfig, *, skip_norm_stats: bool = False
-) -> Dataset:
+def transform_dataset(dataset: Dataset, data_config: _config.DataConfig, *, skip_norm_stats: bool = False) -> Dataset:
     """Transform the dataset by applying the data transforms."""
     norm_stats = {}
     if data_config.repo_id != "fake" and not skip_norm_stats:
@@ -249,9 +230,7 @@ def transform_dataset(
         [
             *data_config.repack_transforms.inputs,
             *data_config.data_transforms.inputs,
-            _transforms.Normalize(
-                norm_stats, use_quantiles=data_config.use_quantile_norm
-            ),
+            _transforms.Normalize(norm_stats, use_quantiles=data_config.use_quantile_norm),
             *data_config.model_transforms.inputs,
         ],
     )
@@ -279,9 +258,7 @@ def transform_iterable_dataset(
         [
             *data_config.repack_transforms.inputs,
             *data_config.data_transforms.inputs,
-            _transforms.Normalize(
-                norm_stats, use_quantiles=data_config.use_quantile_norm
-            ),
+            _transforms.Normalize(norm_stats, use_quantiles=data_config.use_quantile_norm),
             *data_config.model_transforms.inputs,
         ],
         is_batched=is_batched,
@@ -434,12 +411,8 @@ def create_rlds_data_loader(
     """
     if framework == "pytorch":
         raise NotImplementedError("PyTorch RLDS data loader is not supported yet")
-    dataset = create_rlds_dataset(
-        data_config, action_horizon, batch_size, shuffle=shuffle
-    )
-    dataset = transform_iterable_dataset(
-        dataset, data_config, skip_norm_stats=skip_norm_stats, is_batched=True
-    )
+    dataset = create_rlds_dataset(data_config, action_horizon, batch_size, shuffle=shuffle)
+    dataset = transform_iterable_dataset(dataset, data_config, skip_norm_stats=skip_norm_stats, is_batched=True)
 
     data_loader = RLDSDataLoader(
         dataset,
@@ -482,14 +455,10 @@ class TorchDataLoader:
             seed: The seed to use for shuffling the data.
         """
         if jax.process_count() > 1:
-            raise NotImplementedError(
-                "Data loading with multiple processes is not supported."
-            )
+            raise NotImplementedError("Data loading with multiple processes is not supported.")
 
         if len(dataset) < local_batch_size:
-            raise ValueError(
-                f"Local batch size ({local_batch_size}) is larger than the dataset size ({len(dataset)})."
-            )
+            raise ValueError(f"Local batch size ({local_batch_size}) is larger than the dataset size ({len(dataset)}).")
 
         # Store sharding - None for PyTorch, JAX sharding for JAX
         self._sharding = sharding
@@ -540,9 +509,7 @@ class TorchDataLoader:
                 # For JAX, convert to sharded arrays; for PyTorch, return torch tensors
                 if self._sharding is not None:
                     yield jax.tree.map(
-                        lambda x: jax.make_array_from_process_local_data(
-                            self._sharding, x
-                        ),
+                        lambda x: jax.make_array_from_process_local_data(self._sharding, x),
                         batch,
                     )
                 else:
@@ -553,9 +520,7 @@ def _collate_fn(items):
     """Collate the batch elements into batched numpy arrays."""
     # Make sure to convert to numpy arrays before stacking since some of the incoming elements
     # may be JAX arrays.
-    return jax.tree.map(
-        lambda *xs: np.stack([np.asarray(x) for x in xs], axis=0), *items
-    )
+    return jax.tree.map(lambda *xs: np.stack([np.asarray(x) for x in xs], axis=0), *items)
 
 
 def _worker_init_fn(worker_id: int) -> None:
@@ -583,9 +548,7 @@ class RLDSDataLoader:
         self._num_batches = num_batches
 
         if jax.process_count() > 1:
-            raise NotImplementedError(
-                "Data loading with multiple processes is not supported."
-            )
+            raise NotImplementedError("Data loading with multiple processes is not supported.")
 
         if sharding is None:
             # Use data parallel sharding by default.
