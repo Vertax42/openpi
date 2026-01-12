@@ -34,11 +34,11 @@ class FlexivRizon4RealEnv:
             [joint_1.pos, ..., joint_7.pos, gripper_pos]
 
         CARTESIAN_MOTION_FORCE mode (10 dimensions with 6D rotation representation):
-            [x, y, z, r1, r2, r3, r4, r5, r6, gripper_pos]
+            [tcp.x, tcp.y, tcp.z, tcp.r1, tcp.r2, tcp.r3, tcp.r4, tcp.r5, tcp.r6, gripper.pos]
 
-            Where r1-r6 is the 6D rotation representation (first two columns of rotation matrix):
-            - [r1, r2, r3]: First column of rotation matrix
-            - [r4, r5, r6]: Second column of rotation matrix
+            Where tcp.r1-tcp.r6 is the 6D rotation representation (first two columns of rotation matrix):
+            - [tcp.r1, tcp.r2, tcp.r3]: First column of rotation matrix
+            - [tcp.r4, tcp.r5, tcp.r6]: Second column of rotation matrix
 
     Observation space:
         {"qpos": state array (8D or 10D depending on control mode),
@@ -100,8 +100,8 @@ class FlexivRizon4RealEnv:
         """Get state from observation.
 
         Returns:
-            For JOINT_IMPEDANCE mode: [joint_1.pos, ..., joint_7.pos, gripper_pos] (8D)
-            For CARTESIAN_MOTION_FORCE mode: [x, y, z, r1, r2, r3, r4, r5, r6, gripper_pos] (10D)
+            For JOINT_IMPEDANCE mode: [joint_1.pos, ..., joint_7.pos, gripper.pos] (8D)
+            For CARTESIAN_MOTION_FORCE mode: [tcp.x, tcp.y, tcp.z, tcp.r1, ..., tcp.r6, gripper.pos] (10D)
         """
         if self.config.control_mode == ControlMode.JOINT_IMPEDANCE:
             # Joint positions (7D) + gripper (1D)
@@ -111,10 +111,10 @@ class FlexivRizon4RealEnv:
 
         elif self.config.control_mode == ControlMode.CARTESIAN_MOTION_FORCE:
             # Position (3D)
-            position = [obs["x"], obs["y"], obs["z"]]
+            position = [obs["tcp.x"], obs["tcp.y"], obs["tcp.z"]]
 
             # 6D rotation representation (6D)
-            rotation = [obs[f"r{i}"] for i in range(1, 7)]
+            rotation = [obs[f"tcp.r{i}"] for i in range(1, 7)]
 
             # Gripper (1D)
             gripper = [obs["gripper.pos"]]
@@ -180,8 +180,8 @@ class FlexivRizon4RealEnv:
         """Execute action on the robot.
 
         Args:
-            action: For JOINT_IMPEDANCE mode: [joint_1.pos, ..., joint_7.pos, gripper_pos] (8D)
-                    For CARTESIAN_MOTION_FORCE mode: [x, y, z, r1, r2, r3, r4, r5, r6, gripper_pos] (10D)
+            action: For JOINT_IMPEDANCE mode: [joint_1.pos, ..., joint_7.pos, gripper.pos] (8D)
+                    For CARTESIAN_MOTION_FORCE mode: [tcp.x, tcp.y, tcp.z, tcp.r1, ..., tcp.r6, gripper.pos] (10D)
         """
         # Convert action array to dictionary format expected by FlexivRizon4
         action_dict = {}
@@ -194,13 +194,13 @@ class FlexivRizon4RealEnv:
 
         elif self.config.control_mode == ControlMode.CARTESIAN_MOTION_FORCE:
             # Position (3D)
-            action_dict["x"] = float(action[0])
-            action_dict["y"] = float(action[1])
-            action_dict["z"] = float(action[2])
+            action_dict["tcp.x"] = float(action[0])
+            action_dict["tcp.y"] = float(action[1])
+            action_dict["tcp.z"] = float(action[2])
 
             # 6D rotation representation (6D)
             for i in range(1, 7):
-                action_dict[f"r{i}"] = float(action[2 + i])
+                action_dict[f"tcp.r{i}"] = float(action[2 + i])
 
             # Gripper (1D)
             action_dict["gripper.pos"] = float(action[9])
