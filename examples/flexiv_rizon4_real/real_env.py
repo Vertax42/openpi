@@ -5,13 +5,17 @@ This module wraps the lerobot FlexivRizon4 implementation for use with OpenPI.
 
 import collections
 import time
+from typing import Optional
 
 import dm_env
-from lerobot.robots.flexiv_rizon4.config_flexiv_rizon4 import ControlMode
-from lerobot.robots.flexiv_rizon4.config_flexiv_rizon4 import FlexivRizon4Config
+import numpy as np
+
+from lerobot.robots.flexiv_rizon4.config_flexiv_rizon4 import (
+    ControlMode,
+    FlexivRizon4Config,
+)
 from lerobot.robots.utils import make_robot_from_config
 from lerobot.utils.robot_utils import get_logger
-import numpy as np
 
 logger = get_logger("FlexivRizon4RealEnv")
 
@@ -45,7 +49,6 @@ class FlexivRizon4RealEnv:
         self,
         robot_sn: str = "Rizon4-063423",
         control_mode: str = "joint_impedance_control",
-        *,
         use_gripper: bool = True,
         use_force: bool = False,
         go_to_start: bool = True,
@@ -57,7 +60,7 @@ class FlexivRizon4RealEnv:
         flare_gripper_rectify_size: tuple[int, int] = (400, 700),
         flare_gripper_max_pos: float = 85.0,
         # External cameras (scene cameras)
-        cameras: dict | None = None,
+        cameras: Optional[dict] = None,
     ):
         # Convert control_mode string to enum
         control_mode_enum = ControlMode(control_mode)
@@ -106,7 +109,7 @@ class FlexivRizon4RealEnv:
             gripper = [obs["gripper.pos"]]
             return np.array(joints + gripper, dtype=np.float32)
 
-        if self.config.control_mode == ControlMode.CARTESIAN_MOTION_FORCE:
+        elif self.config.control_mode == ControlMode.CARTESIAN_MOTION_FORCE:
             # Note: Model expects gripper_first format: [gripper, x, y, z, r1-r6]
             # Gripper (1D)
             gripper = [obs["gripper.pos"]]
@@ -115,11 +118,12 @@ class FlexivRizon4RealEnv:
             position = [obs["tcp.x"], obs["tcp.y"], obs["tcp.z"]]
 
             # 6D rotation representation (6D)
-            rotation = [obs[f"tcp.r{i}"] for i in range(1, 7)]
+            rotation = [obs[f"tcp.r{i + 1}"] for i in range(6)]
 
-            return np.array(gripper + position + rotation, dtype=np.float32)
+            return np.array(position + rotation + gripper, dtype=np.float32)
 
-        raise ValueError(f"Unsupported control_mode: {self.config.control_mode}")
+        else:
+            raise ValueError(f"Unsupported control_mode: {self.config.control_mode}")
 
     def get_images(self, obs: dict) -> dict:
         """Get camera images from observation.
@@ -186,22 +190,22 @@ class FlexivRizon4RealEnv:
         if self.config.control_mode == ControlMode.JOINT_IMPEDANCE:
             # Joint positions (7D) + gripper (1D)
             for i in range(JOINT_DOF):
-                action_dict[f"joint_{i + 1}.pos"] = float(action[i])
+                action_dict[f"joint_{i+1}.pos"] = float(action[i])
             action_dict["gripper.pos"] = float(action[JOINT_DOF])
 
         elif self.config.control_mode == ControlMode.CARTESIAN_MOTION_FORCE:
-            # Note: Model outputs gripper_first format: [gripper, x, y, z, r1-r6]
-            # Gripper (1D) - at index 0
-            action_dict["gripper.pos"] = float(action[0])
+            # action format: [x, y, z, r1-r6, gripper_pos]
+            # Position (3D) - from indices 0, 1, 2
+            action_dict["tcp.x"] = float(action[0])
+            action_dict["tcp.y"] = float(action[1])
+            action_dict["tcp.z"] = float(action[2])
 
-            # Position (3D) - at index 1, 2, 3
-            action_dict["tcp.x"] = float(action[1])
-            action_dict["tcp.y"] = float(action[2])
-            action_dict["tcp.z"] = float(action[3])
+            # 6D rotation representation (6D) - from indices 3-8
+            for i in range(6):
+                action_dict[f"tcp.r{i + 1}"] = float(action[3 + i])
 
-            # 6D rotation representation (6D) - at index 4-9
-            for i in range(1, 7):
-                action_dict[f"tcp.r{i}"] = float(action[3 + i])
+            # Gripper (1D) - from index 9
+            action_dict["gripper.pos"] = float(action[9])
 
         else:
             raise ValueError(f"Unsupported control_mode: {self.config.control_mode}")
@@ -235,7 +239,6 @@ class FlexivRizon4RealEnv:
 def make_flexiv_rizon4_real_env(
     robot_sn: str = "Rizon4-063423",
     control_mode: str = "joint_impedance_control",
-    *,
     use_gripper: bool = True,
     use_force: bool = False,
     go_to_start: bool = True,
@@ -245,7 +248,7 @@ def make_flexiv_rizon4_real_env(
     flare_gripper_cam_size: tuple[int, int] = (640, 480),
     flare_gripper_rectify_size: tuple[int, int] = (400, 700),
     flare_gripper_max_pos: float = 85.0,
-    cameras: dict | None = None,
+    cameras: Optional[dict] = None,
 ) -> FlexivRizon4RealEnv:
     """Create Flexiv Rizon4 real environment."""
     return FlexivRizon4RealEnv(

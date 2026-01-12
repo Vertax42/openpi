@@ -519,8 +519,6 @@ class LeRobotXenseFlareDataConfig(DataConfigFactory):
     Example data config for custom Xense Flare dataset in LeRobot format.
     """
 
-    gripper_first: bool = False
-
     use_delta_cartesian_actions: bool = True
     # If provided, will be injected into the input data if the "prompt" key is not present.
     default_prompt: str | None = None
@@ -1337,7 +1335,6 @@ _CONFIGS = [
         ),
         data=LeRobotXenseFlareDataConfig(
             repo_id="Vertax/xense_flare_pick_and_place_cube_20260105",  # your datasets repo_id
-            gripper_first=True,
             use_delta_cartesian_actions=True,
             default_prompt="pick up cubes in rgb order from the table and place them in the blue box",
             repack_transforms=_transforms.Group(
@@ -1377,7 +1374,6 @@ _CONFIGS = [
         data=LeRobotXenseFlareDataConfig(
             repo_id="Vertax/xense_flare_open_lock_20260108",  # your datasets repo_id
             use_delta_cartesian_actions=True,
-            gripper_first=True,
             default_prompt="open the lock with the key",
             repack_transforms=_transforms.Group(
                 inputs=[
@@ -1416,8 +1412,7 @@ _CONFIGS = [
         data=LeRobotXenseFlareDataConfig(
             repo_id="Vertax/xense_flare_wipe_vase_20260110",  # your datasets repo_id
             use_delta_cartesian_actions=True,
-            gripper_first=True,
-            default_prompt="open the lock with the key",
+            default_prompt="wipe the vase",
             repack_transforms=_transforms.Group(
                 inputs=[
                     _transforms.RepackTransform(
