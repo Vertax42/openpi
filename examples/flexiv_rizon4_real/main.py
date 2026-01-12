@@ -122,7 +122,7 @@ class Args:
     render_width: int = 224
 
     # Runtime settings
-    action_horizon: int = 20
+    action_horizon: int = 50
     runtime_hz: float = 10.0  # Control frequency
     num_episodes: int = 1
     max_episode_steps: int = 100000

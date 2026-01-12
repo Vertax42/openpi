@@ -183,7 +183,13 @@ class FlexivRizon4RealEnv:
             # Joint positions (7D) + gripper (1D)
             for i in range(JOINT_DOF):
                 action_dict[f"joint_{i + 1}.pos"] = float(action[i])
-            action_dict["gripper.pos"] = float(action[JOINT_DOF])
+
+            gripper_pos = float(action[JOINT_DOF])
+            if gripper_pos < 0:
+                gripper_pos = 0
+            elif gripper_pos > 1:
+                gripper_pos = 1
+            action_dict["gripper.pos"] = gripper_pos
 
         elif self.config.control_mode == ControlMode.CARTESIAN_MOTION_FORCE:
             # action format: [x, y, z, r1-r6, gripper_pos]
@@ -197,7 +203,12 @@ class FlexivRizon4RealEnv:
                 action_dict[f"tcp.r{i + 1}"] = float(action[3 + i])
 
             # Gripper (1D) - from index 9
-            action_dict["gripper.pos"] = float(action[9])
+            gripper_pos = float(action[9])
+            if gripper_pos < 0:
+                gripper_pos = 0
+            elif gripper_pos > 1:
+                gripper_pos = 1
+            action_dict["gripper.pos"] = gripper_pos
 
         else:
             raise ValueError(f"Unsupported control_mode: {self.config.control_mode}")
