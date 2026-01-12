@@ -1406,6 +1406,44 @@ _CONFIGS = [
         fsdp_devices=1,  # refer line 359
     ),
     TrainConfig(
+        name="pi05_base_xense_flare_wipe_vase",
+        model=pi0_config.Pi0Config(
+            paligemma_variant="gemma_2b_lora",
+            action_expert_variant="gemma_300m_lora",
+            pi05=True,
+        ),
+        data=LeRobotXenseFlareDataConfig(
+            repo_id="Vertax/xense_flare_wipe_vase_20260110",  # your datasets repo_id
+            use_delta_cartesian_actions=True,
+            default_prompt="open the lock with the key",
+            repack_transforms=_transforms.Group(
+                inputs=[
+                    _transforms.RepackTransform(
+                        {
+                            "images": {"observation/wrist_image_left": "observation.images.wrist_cam"},
+                            "state": "observation.state",
+                            "actions": "action",
+                            "prompt": "task",
+                        }
+                    )
+                ]
+            ),
+            base_config=DataConfig(
+                prompt_from_task=True,  # Set to True for prompt by task_name
+            ),
+        ),
+        freeze_filter=pi0_config.Pi0Config(
+            pi05=True,
+            paligemma_variant="gemma_2b_lora",
+            action_expert_variant="gemma_300m_lora",
+        ).get_freeze_filter(),
+        batch_size=64,  # the total batch_size not pre_gpu batch_size
+        weight_loader=weight_loaders.CheckpointWeightLoader("gs://openpi-assets/checkpoints/pi05_base/params"),
+        num_train_steps=20_000,
+        num_workers=1,  # default 2
+        fsdp_devices=1,  # refer line 359
+    ),
+    TrainConfig(
         # This config is for fine-tuning pi05 on the *full* DROID dataset.
         # We use RLDS data loading to make training on this large dataset tractable.
         # For fine-tuning on your own DROID dataset, see below.
