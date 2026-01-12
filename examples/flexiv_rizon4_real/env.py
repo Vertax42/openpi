@@ -1,15 +1,13 @@
 """OpenPI Environment wrapper for Flexiv Rizon4 robot."""
 
-from typing import Optional
-
 import einops
+from lerobot.utils.robot_utils import get_logger
 import numpy as np
 from openpi_client import image_tools
 from openpi_client.runtime import environment as _environment
 from typing_extensions import override
 
 import examples.flexiv_rizon4_real.real_env as _real_env
-from lerobot.utils.robot_utils import get_logger
 
 logger = get_logger("FlexivRizon4Env")
 
@@ -34,7 +32,7 @@ class FlexivRizon4RealEnvironment(_environment.Environment):
         flare_gripper_rectify_size: tuple[int, int] = (200, 350),
         flare_gripper_max_pos: float = 85.0,
         # External cameras
-        cameras: Optional[dict] = None,
+        cameras: dict | None = None,
     ) -> None:
         self._env = _real_env.make_flexiv_rizon4_real_env(
             robot_sn=robot_sn,
@@ -95,17 +93,13 @@ class FlexivRizon4RealEnvironment(_environment.Environment):
             # Original image is already uint8 format (H, W, 3)
             single_img = obs["images"][cam_name]
 
-            logger.debug(
-                f"Camera {cam_name}: original shape={single_img.shape}, dtype={single_img.dtype}"
-            )
+            logger.debug(f"Camera {cam_name}: original shape={single_img.shape}, dtype={single_img.dtype}")
 
             # Expand single image to batch format [1, H, W, C] for resize_with_pad
             batch_img = np.expand_dims(single_img, axis=0)
 
             # Resize image to specified resolution
-            resized_batch = image_tools.resize_with_pad(
-                batch_img, self._render_height, self._render_width
-            )
+            resized_batch = image_tools.resize_with_pad(batch_img, self._render_height, self._render_width)
 
             # Extract first image from batch [1, H, W, C] -> [H, W, C]
             resized_img = resized_batch[0]
@@ -115,14 +109,8 @@ class FlexivRizon4RealEnvironment(_environment.Environment):
             policy_cam_name = self.CAMERA_NAME_MAP[cam_name]
             processed_images[policy_cam_name] = einops.rearrange(resized_img, "h w c -> c h w")
 
-        # Reorder state from gripper_last to gripper_first format
-        # real_env outputs: [tcp_x, tcp_y, tcp_z, qw, qx, qy, qz, gripper] (gripper_last)
-        # policy expects:   [gripper, tcp_x, tcp_y, tcp_z, qw, qx, qy, qz] (gripper_first)
-        qpos = obs["qpos"]
-        state_gripper_first = np.concatenate([qpos[-1:], qpos[:-1]])
-
         return {
-            "state": state_gripper_first,
+            "state": obs["qpos"],
             "images": processed_images,
             # prompt is injected by policy server's InjectDefaultPrompt
         }
