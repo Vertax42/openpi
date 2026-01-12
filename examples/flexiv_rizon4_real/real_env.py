@@ -5,17 +5,13 @@ This module wraps the lerobot FlexivRizon4 implementation for use with OpenPI.
 
 import collections
 import time
-from typing import Optional
 
 import dm_env
-import numpy as np
-
-from lerobot.robots.flexiv_rizon4.config_flexiv_rizon4 import (
-    ControlMode,
-    FlexivRizon4Config,
-)
+from lerobot.robots.flexiv_rizon4.config_flexiv_rizon4 import ControlMode
+from lerobot.robots.flexiv_rizon4.config_flexiv_rizon4 import FlexivRizon4Config
 from lerobot.robots.utils import make_robot_from_config
 from lerobot.utils.robot_utils import get_logger
+import numpy as np
 
 logger = get_logger("FlexivRizon4RealEnv")
 
@@ -33,8 +29,8 @@ class FlexivRizon4RealEnv:
         JOINT_IMPEDANCE mode (8 dimensions):
             [joint_1.pos, ..., joint_7.pos, gripper_pos]
 
-        CARTESIAN_MOTION_FORCE mode (10 dimensions with 6D rotation, gripper_first):
-            [gripper.pos, tcp.x, tcp.y, tcp.z, tcp.r1, tcp.r2, tcp.r3, tcp.r4, tcp.r5, tcp.r6]
+        CARTESIAN_MOTION_FORCE mode (10 dimensions with 6D rotation):
+            [tcp.x, tcp.y, tcp.z, tcp.r1, tcp.r2, tcp.r3, tcp.r4, tcp.r5, tcp.r6, gripper.pos]
 
             Where tcp.r1-tcp.r6 is the 6D rotation representation (first two columns of rotation matrix):
             - [tcp.r1, tcp.r2, tcp.r3]: First column of rotation matrix
@@ -60,7 +56,7 @@ class FlexivRizon4RealEnv:
         flare_gripper_rectify_size: tuple[int, int] = (400, 700),
         flare_gripper_max_pos: float = 85.0,
         # External cameras (scene cameras)
-        cameras: Optional[dict] = None,
+        cameras: dict | None = None,
     ):
         # Convert control_mode string to enum
         control_mode_enum = ControlMode(control_mode)
@@ -101,7 +97,7 @@ class FlexivRizon4RealEnv:
 
         Returns:
             For JOINT_IMPEDANCE mode: [joint_1.pos, ..., joint_7.pos, gripper.pos] (8D)
-            For CARTESIAN_MOTION_FORCE mode (gripper_first): [gripper.pos, tcp.x, tcp.y, tcp.z, tcp.r1, ..., tcp.r6] (10D)
+            For CARTESIAN_MOTION_FORCE mode: [tcp.x, tcp.y, tcp.z, tcp.r1, ..., tcp.r6, gripper.pos] (10D)
         """
         if self.config.control_mode == ControlMode.JOINT_IMPEDANCE:
             # Joint positions (7D) + gripper (1D)
@@ -109,21 +105,17 @@ class FlexivRizon4RealEnv:
             gripper = [obs["gripper.pos"]]
             return np.array(joints + gripper, dtype=np.float32)
 
-        elif self.config.control_mode == ControlMode.CARTESIAN_MOTION_FORCE:
-            # Note: Model expects gripper_first format: [gripper, x, y, z, r1-r6]
+        if self.config.control_mode == ControlMode.CARTESIAN_MOTION_FORCE:
+            # Position (3D)
+            position = [obs["tcp.x"], obs["tcp.y"], obs["tcp.z"]]
+            # 6D rotation representation (6D)
+            rotation = [obs[f"tcp.r{i + 1}"] for i in range(6)]
             # Gripper (1D)
             gripper = [obs["gripper.pos"]]
 
-            # Position (3D)
-            position = [obs["tcp.x"], obs["tcp.y"], obs["tcp.z"]]
-
-            # 6D rotation representation (6D)
-            rotation = [obs[f"tcp.r{i + 1}"] for i in range(6)]
-
             return np.array(position + rotation + gripper, dtype=np.float32)
 
-        else:
-            raise ValueError(f"Unsupported control_mode: {self.config.control_mode}")
+        raise ValueError(f"Unsupported control_mode: {self.config.control_mode}")
 
     def get_images(self, obs: dict) -> dict:
         """Get camera images from observation.
@@ -182,7 +174,7 @@ class FlexivRizon4RealEnv:
 
         Args:
             action: For JOINT_IMPEDANCE mode: [joint_1.pos, ..., joint_7.pos, gripper.pos] (8D)
-                    For CARTESIAN_MOTION_FORCE mode (gripper_first): [gripper.pos, tcp.x, tcp.y, tcp.z, tcp.r1, ..., tcp.r6] (10D)
+                    For CARTESIAN_MOTION_FORCE mode: [tcp.x, tcp.y, tcp.z, tcp.r1, ..., tcp.r6, gripper.pos] (10D)
         """
         # Convert action array to dictionary format expected by FlexivRizon4
         action_dict = {}
@@ -190,7 +182,7 @@ class FlexivRizon4RealEnv:
         if self.config.control_mode == ControlMode.JOINT_IMPEDANCE:
             # Joint positions (7D) + gripper (1D)
             for i in range(JOINT_DOF):
-                action_dict[f"joint_{i+1}.pos"] = float(action[i])
+                action_dict[f"joint_{i + 1}.pos"] = float(action[i])
             action_dict["gripper.pos"] = float(action[JOINT_DOF])
 
         elif self.config.control_mode == ControlMode.CARTESIAN_MOTION_FORCE:
@@ -248,7 +240,7 @@ def make_flexiv_rizon4_real_env(
     flare_gripper_cam_size: tuple[int, int] = (640, 480),
     flare_gripper_rectify_size: tuple[int, int] = (400, 700),
     flare_gripper_max_pos: float = 85.0,
-    cameras: Optional[dict] = None,
+    cameras: dict | None = None,
 ) -> FlexivRizon4RealEnv:
     """Create Flexiv Rizon4 real environment."""
     return FlexivRizon4RealEnv(
