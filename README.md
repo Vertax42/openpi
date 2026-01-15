@@ -416,6 +416,8 @@ python scripts/serve_policy.py --default-prompt="pick rgb cubes and place them i
 # open lock 20260108
 python scripts/serve_policy.py --default-prompt="open the lock with the key" policy:checkpoint --policy.config=pi05_base_xense_flare_open_lock --policy.dir=checkpoints/pi05_base_xense_flare_open_lock/xense_flare_open_lock_20260108/19999
 
+# wipe vase 20260115
+python scripts/serve_policy.py --default-prompt="wipe the vase" policy:checkpoint --policy.config=pi05_base_xense_flare_wipe_vase --policy.dir=checkpoints/pi05_base_xense_flare_wipe_vase/xense_flare_wipe_vase_20260113/19999
 
 192.168.1.165:8000
 vertax@Jarvis:~$ nc -zv 192.168.2.215 8000
