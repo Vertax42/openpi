@@ -1334,7 +1334,7 @@ _CONFIGS = [
             max_delay=10,
         ),
         data=LeRobotXenseFlareDataConfig(
-            repo_id="Vertax/xense_flare_pick_and_place_cube_20260105",  # your datasets repo_id
+            repo_id="Vertax/xense_flare_pick_and_place_cube_20260113",  # your datasets repo_id
             use_delta_cartesian_actions=True,
             default_prompt="pick up cubes in rgb order from the table and place them in the blue box",
             repack_transforms=_transforms.Group(
@@ -1410,7 +1410,7 @@ _CONFIGS = [
             pi05=True,
         ),
         data=LeRobotXenseFlareDataConfig(
-            repo_id="Vertax/xense_flare_wipe_vase_20260110",  # your datasets repo_id
+            repo_id="Vertax/xense_flare_wipe_vase_20260113",  # your datasets repo_id
             use_delta_cartesian_actions=True,
             default_prompt="wipe the vase",
             repack_transforms=_transforms.Group(

@@ -384,9 +384,13 @@ XLA_PYTHON_CLIENT_MEM_FRACTION=0.9 python scripts/train.py pi05_base_arx5_lora_t
 python scripts/compute_norm_stats.py --config-name pi05_base_xense_flare_open_lock
 XLA_PYTHON_CLIENT_MEM_FRACTION=0.9 python scripts/train.py pi05_base_xense_flare_open_lock --exp-name=xense_flare_open_lock_20260108 --overwrite / --resume
 
-# 20260110 xense flare wipe vase
+# 20260113 xense flare wipe vase
 python scripts/compute_norm_stats.py --config-name pi05_base_xense_flare_wipe_vase
-XLA_PYTHON_CLIENT_MEM_FRACTION=0.9 python scripts/train.py pi05_base_xense_flare_wipe_vase --exp-name=xense_flare_wipe_vase_20260110 --overwrite
+XLA_PYTHON_CLIENT_MEM_FRACTION=0.9 python scripts/train.py pi05_base_xense_flare_wipe_vase --exp-name=xense_flare_wipe_vase_20260113 --overwrite / --resume
+
+# 20260115 xense flare pick and place cube
+python scripts/compute_norm_stats.py --config-name pi05_base_xense_flare_pick_and_place_cube
+XLA_PYTHON_CLIENT_MEM_FRACTION=0.9 python scripts/train.py pi05_base_xense_flare_pick_and_place_cube --exp-name=xense_flare_pick_and_place_cube_20260115 --overwrite / --resume
 
 ## inference time commands
 copy checkpoints from autodl server to local server
