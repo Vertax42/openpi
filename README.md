@@ -419,6 +419,9 @@ python scripts/serve_policy.py --default-prompt="open the lock with the key" pol
 # wipe vase 20260115
 python scripts/serve_policy.py --default-prompt="wipe the vase" policy:checkpoint --policy.config=pi05_base_xense_flare_wipe_vase --policy.dir=checkpoints/pi05_base_xense_flare_wipe_vase/xense_flare_wipe_vase_20260113/19999
 
+# pick and place cube 20260115
+python scripts/serve_policy.py --default-prompt="pick up cubes in rgb order from the table and place them in the blue box" policy:checkpoint --policy.config=pi05_base_xense_flare_pick_and_place_cube --policy.dir=checkpoints/pi05_base_xense_flare_pick_and_place_cube/xense_flare_pick_and_place_cube_20260115/39999
+
 192.168.1.165:8000
 vertax@Jarvis:~$ nc -zv 192.168.2.215 8000
 Connection to 192.168.2.215 8000 port [tcp/*] succeeded!
