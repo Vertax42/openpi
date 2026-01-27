@@ -1,16 +1,30 @@
-# openpi
+# openpi - Xense Robotics Fork
 
-openpi holds open-source models and packages for robotics, published by the [Physical Intelligence team](https://www.physicalintelligence.company/).
+> **Note:** This is a fork of [Physical Intelligence's openpi repository](https://github.com/Physical-Intelligence/openpi), adapted and extended for **Xense Robotics platforms** (BiARX5 and Xense Flare dual-arm robots).
 
-Currently, this repo contains three types of models:
+## 🎯 Our Contributions
 
-- the [π₀ model](https://www.physicalintelligence.company/blog/pi0), a flow-based vision-language-action model (VLA).
-- the [π₀-FAST model](https://www.physicalintelligence.company/research/fast), an autoregressive VLA, based on the FAST action tokenizer.
-- the [π₀.₅ model](https://www.physicalintelligence.company/blog/pi05), an upgraded version of π₀ with better open-world generalization trained with [knowledge insulation](https://www.physicalintelligence.company/research/knowledge_insulation). Note that, in this repository, we currently only support the flow matching head for both $\pi_{0.5}$ training and inference.
+This fork focuses on adapting OpenPI models to Xense Robotics platforms with the following key contributions:
+
+- **Xense Platform Support**: Complete integration for BiARX5 and Xense Flare dual-arm robot platforms
+- **Custom Training Configurations**: Fine-tuned configs for various manipulation tasks (tie shoes, pick-and-place, open lock, wipe vase, etc.)
+- **Platform-Specific Policies**: `xense_flare_policy.py` and optimized data processing pipelines for Xense robots
+- **Real-World Deployment**: Production-ready inference and training commands for Xense platforms
+- **Streamlined Codebase**: Removed ALOHA and LIBERO dependencies to focus on DROID and Xense platforms
+
+---
+
+## About OpenPI
+
+openpi holds open-source models and packages for robotics, originally published by the [Physical Intelligence team](https://www.physicalintelligence.company/).
+
+This repository contains three types of models:
+
+- **[π₀ model](https://www.physicalintelligence.company/blog/pi0)**: A flow-based vision-language-action model (VLA)
+- **[π₀-FAST model](https://www.physicalintelligence.company/research/fast)**: An autoregressive VLA based on the FAST action tokenizer
+- **[π₀.₅ model](https://www.physicalintelligence.company/blog/pi05)**: An upgraded version of π₀ with better open-world generalization trained with [knowledge insulation](https://www.physicalintelligence.company/research/knowledge_insulation)
 
 For all models, we provide _base model_ checkpoints, pre-trained on 10k+ hours of robot data, and examples for using them out of the box or fine-tuning them to your own datasets.
-
-This is an experiment: $\pi_0$ was developed for our own robots, which differ from the widely used platforms such as [ALOHA](https://tonyzhaozh.github.io/aloha/) and [DROID](https://droid-dataset.github.io/), and though we are optimistic that researchers and practitioners will be able to run creative new experiments adapting $\pi_0$ to their own platforms, we do not expect every such attempt to be successful. All this is to say: $\pi_0$ may or may not work for you, but you are welcome to try it and see!
 
 ## Updates
 
@@ -297,7 +311,7 @@ With torch.compile, inference speed is comparable between JAX and PyTorch.
 
 ## Troubleshooting
 
-We will collect common issues and their solutions here. If you encounter an issue, please check here first. If you can't find a solution, please file an issue on the repo (see [here](CONTRIBUTING.md) for guidelines).
+We will collect common issues and their solutions here. If you encounter an issue, please check here first. If you can't find a solution, please file an issue on the repo.
 
 | Issue                                     | Resolution                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 | ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -311,112 +325,157 @@ We will collect common issues and their solutions here. If you encounter an issu
 | Action dimensions mismatch                | Verify your data processing transforms match the expected input/output dimensions of your robot. Check the action space definitions in your policy classes.                                                                                                                                                                                                                                                                                                                                                         |
 | Diverging training loss                   | Check the `q01`, `q99`, and `std` values in `norm_stats.json` for your dataset. Certain dimensions that are rarely used can end up with very small `q01`, `q99`, or `std` values, leading to huge states and actions after normalization. You can manually adjust the norm stats as a workaround.                                                                                                                                                                                                                   |
 
-### Training on BiARX5
 
-````bash
+---
 
+## 🤖 Xense Platform Training & Deployment
+
+This section contains production-ready commands for training and deploying models on Xense Robotics platforms.
+
+### Platform Overview
+
+- **BiARX5**: Bi-manual ARX-5 robot setup with parallel grippers
+- **Xense Flare**: UMI-style dual-arm robot with data collection grippers
+
+### Environment Setup for Training
+
+```bash
+# Start a tmux session
 tmux new -s training
-# local datasetsmode
-export HF_HUB_OFFLINE=1 && export HF_DATASETS_OFFLINE=1 && echo "Offline mode enabled"
-export HF_DATASETS_CACHE=/home/ubuntu/.cache/huggingface/datasets && echo "HF_DATASETS_CACHE set to: $HF_DATASETS_CACHE"
 
+# Configure offline mode for local datasets
+export HF_HUB_OFFLINE=1 && export HF_DATASETS_OFFLINE=1 && echo "Offline mode enabled"
+export HF_DATASETS_CACHE=/home/ubuntu/.cache/huggingface/datasets
+
+# Configure NCCL for multi-GPU training
 export NCCL_P2P_DISABLE=1
 export NCCL_SHM_DISABLE=1
 export NCCL_IB_DISABLE=1
 export NCCL_NET_GDR_LEVEL=0
 export NCCL_TOPO_FILE=/dev/null
 export CUDA_VISIBLE_DEVICES=0,1,2,3
-
-torchrun --nproc_per_node=1 scripts/train_pytorch.py pi05_base_arx5_full --exp-name=xense_bi_arx5_pick_and_place_cube_full --resume ; shutdown -h +5
-
-torchrun --nproc_per_node=4 scripts/train_pytorch.py pi05_base_arx5_tie_shoes_full --exp-name=tie_shoes_full_100_episodes_torch --overwrite ; shutdown -h +5
-
-python scripts/compute_norm_stats.py --config-name pi05_base_arx5_full
-XLA_PYTHON_CLIENT_MEM_FRACTION=0.9 python scripts/train_pytorch.py pi05_base_arx5_full --exp-name=xense_bi_arx5_pick_and_place_cube --overwrite / --resume
-
-# 20251021_XenseRobotics_TieShoes
-python scripts/compute_norm_stats.py --config-name pi05_base_arx5_tie_shoes_lora
-XLA_PYTHON_CLIENT_MEM_FRACTION=0.9 python scripts/train.py pi05_base_arx5_tie_shoes_lora --exp-name=tie_shoes_lora_100_episodes --overwrite / --resume
-
-# 20251027_TieShoes_HighQuality_Lora
-python scripts/compute_norm_stats.py --config-name pi05_base_arx5_tie_shoes_high_quality_lora_1027
-XLA_PYTHON_CLIENT_MEM_FRACTION=0.9 python scripts/train.py pi05_base_arx5_tie_shoes_high_quality_lora_1027 --exp-name=tie_shoes_lora_50_episodes --overwrite / --resume
-
-# 20251028_TieShoes_HighQuality_White_Lora
-python scripts/compute_norm_stats.py --config-name pi05_base_arx5_tie_shoes_high_quality_white_lora_1028
-XLA_PYTHON_CLIENT_MEM_FRACTION=0.9 python scripts/train.py pi05_base_arx5_tie_shoes_high_quality_white_lora_1028 --exp-name=tie_shoes_white_lora_50_episodes --overwrite / --resume
-
-# 20251101_TIeShoes_25episodes_lora_no_adjust
-python scripts/compute_norm_stats.py --config-name tie_shoes_white_lora_finetune_1030_25_episodes
-XLA_PYTHON_CLIENT_MEM_FRACTION=0.9 python scripts/train.py tie_shoes_white_lora_finetune_1030_25_episodes --exp-name=tie_shoes_25_episodes_lora_no_adjust_1101 --overwrite / --resume
-
-# 20251021_AutoDL_TieShoes
-jax[cuda13]
-orbax-checkpoint==0.11.20
-
-# 20251103 TieShoes_50episodes_lora_no_adjust
-XLA_PYTHON_CLIENT_MEM_FRACTION=0.9 python scripts/train.py tie_shoes_50_episodes_lora_no_adjust_1101 --exp-name tie_shoes_50_episodes_lora_no_adjust_1103_40000 --overwrite
-
-XLA_PYTHON_CLIENT_MEM_FRACTION=0.9 python scripts/train.py tie_shoes_50_episodes_lora_no_adjust_1101 --exp-name tie_shoes_50_episodes_lora_no_adjust_1103_40000 --resume
-
-python scripts/compute_norm_stats.py --config-name pi05_base_arx5_tie_shoes_full
-XLA_PYTHON_CLIENT_MEM_FRACTION=0.9 python scripts/train.py pi05_base_arx5_tie_shoes_full --exp-name=tie_shoes_full_100_episodes_gpu_test --overwrite / --resume
-
-# test 20251111 lerobot040_test_bi_arx5
-python scripts/compute_norm_stats.py --config-name pi05_base_full_test
-XLA_PYTHON_CLIENT_MEM_FRACTION=0.9 python scripts/train.py pi05_base_full_test --exp-name=pi05_base_full_test --overwrite / --resume
-
-# 20251204 pick and place chips train
-XLA_PYTHON_CLIENT_MEM_FRACTION=0.9 python scripts/train.py pi05_base_arx5_lora_pick_and_place_chips --exp-name=pi05_base_arx5_lora_pick_and_place_chips_20251204 --overwrite
-
-# 20251209 training time rtc
-XLA_PYTHON_CLIENT_MEM_FRACTION=0.9 python scripts/train.py pi05_base_arx5_lora_training_time_rtc --exp-name=training_time_rtc_20251209 --overwrite
-
-# 20260108 xense flare open lock
-python scripts/compute_norm_stats.py --config-name pi05_base_xense_flare_open_lock
-XLA_PYTHON_CLIENT_MEM_FRACTION=0.9 python scripts/train.py pi05_base_xense_flare_open_lock --exp-name=xense_flare_open_lock_20260108 --overwrite / --resume
-
-# 20260113 xense flare wipe vase
-python scripts/compute_norm_stats.py --config-name pi05_base_xense_flare_wipe_vase
-XLA_PYTHON_CLIENT_MEM_FRACTION=0.9 python scripts/train.py pi05_base_xense_flare_wipe_vase --exp-name=xense_flare_wipe_vase_20260113 --overwrite / --resume
-
-# 20260115 xense flare pick and place cube
-python scripts/compute_norm_stats.py --config-name pi05_base_xense_flare_pick_and_place_cube
-XLA_PYTHON_CLIENT_MEM_FRACTION=0.9 python scripts/train.py pi05_base_xense_flare_pick_and_place_cube --exp-name=xense_flare_pick_and_place_cube_20260115 --overwrite / --resume
-
-## inference time commands
-copy checkpoints from autodl server to local server
-```bash
-scp -P 15443 -r root@connect.westd.seetacloud.com:/root/autodl-tmp/openpi/checkpoints/pi05_base_arx5_tie_shoes_full/tie_shoes_full_100_episodes_torch/20000 .
-````
-
-```bash
-# pick and place
-python scripts/serve_policy.py --default-prompt="pick rgb cubes and place them into the blue box" policy:checkpoint --policy.config=pi05_base_arx5_lora --policy.dir=checkpoints/pi05_base_arx5_lora/xense_bi_arx5_pick_and_place_cube_arx5_assets/33000
-
-# tie shoes
-python scripts/serve_policy.py --default-prompt="tie shoelaces" policy:checkpoint --policy.config=pi05_base_arx5_tie_shoes_lora --policy.dir=checkpoints/pi05_base_arx5_tie_shoes_lora/tie_shoes_lora_50_episodes/33000
-
-python scripts/serve_policy.py policy:checkpoint --policy.config=tie_shoes_50_episodes_lora_no_adjust_1101 --policy.dir=checkpoints/tie_shoes_50_episodes_lora_no_adjust_1101/tie_shoes_50_episodes_lora_no_adjust_1103_40000/16000
-
-# pick and place chips
-python scripts/serve_policy.py --default-prompt="pick up a potato chip and place it into the chips container" policy:checkpoint --policy.config=pi05_base_arx5_lora_pick_and_place_chips --policy.dir=checkpoints/pi05_base_arx5_lora_pick_and_place_chips/pi05_base_arx5_lora_pick_and_place_chips_20251204/19999
-
-# training time RTC
-python scripts/serve_policy.py --default-prompt="pick rgb cubes and place them into the blue box" policy:checkpoint --policy.config=pi05_base_arx5_lora_training_time_rtc --policy.dir=checkpoints/pi05_base_arx5_lora_training_time_rtc/training_time_rtc_20251209/39999
-
-# open lock 20260108
-python scripts/serve_policy.py --default-prompt="open the lock with the key" policy:checkpoint --policy.config=pi05_base_xense_flare_open_lock --policy.dir=checkpoints/pi05_base_xense_flare_open_lock/xense_flare_open_lock_20260108/19999
-
-# wipe vase 20260115
-python scripts/serve_policy.py --default-prompt="wipe the vase" policy:checkpoint --policy.config=pi05_base_xense_flare_wipe_vase --policy.dir=checkpoints/pi05_base_xense_flare_wipe_vase/xense_flare_wipe_vase_20260113/19999
-
-# pick and place cube 20260115
-python scripts/serve_policy.py --default-prompt="pick up cubes in rgb order from the table and place them in the blue box" policy:checkpoint --policy.config=pi05_base_xense_flare_pick_and_place_cube --policy.dir=checkpoints/pi05_base_xense_flare_pick_and_place_cube/xense_flare_pick_and_place_cube_20260115/39999
-
-192.168.1.165:8000
-vertax@Jarvis:~$ nc -zv 192.168.2.215 8000
-Connection to 192.168.2.215 8000 port [tcp/*] succeeded!
-python -m examples.bi_arx5_real.main     --args.host 192.168.2.215     --args.port 8000     --args.dry_run  --args.enable_tactile_sensors
-
 ```
+
+### Training Commands
+
+#### BiARX5 Platform
+
+```bash
+# Pick and place (full fine-tuning)
+python scripts/compute_norm_stats.py --config-name pi05_base_arx5_full
+torchrun --nproc_per_node=1 scripts/train_pytorch.py pi05_base_arx5_full \
+    --exp-name=xense_bi_arx5_pick_and_place_cube_full --resume
+
+# Tie shoes (LoRA fine-tuning)
+python scripts/compute_norm_stats.py --config-name pi05_base_arx5_tie_shoes_lora
+XLA_PYTHON_CLIENT_MEM_FRACTION=0.9 python scripts/train.py pi05_base_arx5_tie_shoes_lora \
+    --exp-name=tie_shoes_lora_100_episodes --overwrite
+
+# Pick and place chips
+XLA_PYTHON_CLIENT_MEM_FRACTION=0.9 python scripts/train.py pi05_base_arx5_lora_pick_and_place_chips \
+    --exp-name=pi05_base_arx5_lora_pick_and_place_chips_20251204 --overwrite
+```
+
+#### Xense Flare Platform (UMI-style grippers)
+
+```bash
+# Open lock task
+python scripts/compute_norm_stats.py --config-name pi05_base_xense_flare_open_lock
+XLA_PYTHON_CLIENT_MEM_FRACTION=0.9 python scripts/train.py pi05_base_xense_flare_open_lock \
+    --exp-name=xense_flare_open_lock_20260108 --overwrite
+
+# Wipe vase task
+python scripts/compute_norm_stats.py --config-name pi05_base_xense_flare_wipe_vase
+XLA_PYTHON_CLIENT_MEM_FRACTION=0.9 python scripts/train.py pi05_base_xense_flare_wipe_vase \
+    --exp-name=xense_flare_wipe_vase_20260113 --overwrite
+
+# Pick and place cube task
+python scripts/compute_norm_stats.py --config-name pi05_base_xense_flare_pick_and_place_cube
+XLA_PYTHON_CLIENT_MEM_FRACTION=0.9 python scripts/train.py pi05_base_xense_flare_pick_and_place_cube \
+    --exp-name=xense_flare_pick_and_place_cube_20260115 --overwrite
+```
+
+### Deployment Commands
+
+#### BiARX5 Platform Inference
+
+```bash
+# Pick and place RGB cubes
+python scripts/serve_policy.py \
+    --default-prompt="pick rgb cubes and place them into the blue box" \
+    policy:checkpoint \
+    --policy.config=pi05_base_arx5_lora \
+    --policy.dir=checkpoints/pi05_base_arx5_lora/xense_bi_arx5_pick_and_place_cube_arx5_assets/33000
+
+# Tie shoelaces
+python scripts/serve_policy.py \
+    --default-prompt="tie shoelaces" \
+    policy:checkpoint \
+    --policy.config=pi05_base_arx5_tie_shoes_lora \
+    --policy.dir=checkpoints/pi05_base_arx5_tie_shoes_lora/tie_shoes_lora_50_episodes/33000
+
+# Pick and place chips
+python scripts/serve_policy.py \
+    --default-prompt="pick up a potato chip and place it into the chips container" \
+    policy:checkpoint \
+    --policy.config=pi05_base_arx5_lora_pick_and_place_chips \
+    --policy.dir=checkpoints/pi05_base_arx5_lora_pick_and_place_chips/pi05_base_arx5_lora_pick_and_place_chips_20251204/19999
+```
+
+#### Xense Flare Platform Inference
+
+```bash
+# Open lock with key
+python scripts/serve_policy.py \
+    --default-prompt="open the lock with the key" \
+    policy:checkpoint \
+    --policy.config=pi05_base_xense_flare_open_lock \
+    --policy.dir=checkpoints/pi05_base_xense_flare_open_lock/xense_flare_open_lock_20260108/19999
+
+# Wipe vase
+python scripts/serve_policy.py \
+    --default-prompt="wipe the vase" \
+    policy:checkpoint \
+    --policy.config=pi05_base_xense_flare_wipe_vase \
+    --policy.dir=checkpoints/pi05_base_xense_flare_wipe_vase/xense_flare_wipe_vase_20260113/19999
+
+# Pick and place cube (RGB order)
+python scripts/serve_policy.py \
+    --default-prompt="pick up cubes in rgb order from the table and place them in the blue box" \
+    policy:checkpoint \
+    --policy.config=pi05_base_xense_flare_pick_and_place_cube \
+    --policy.dir=checkpoints/pi05_base_xense_flare_pick_and_place_cube/xense_flare_pick_and_place_cube_20260115/39999
+```
+
+### Utilities
+
+#### Checkpoint Transfer
+
+```bash
+# Copy checkpoints from remote server to local
+scp -P 15443 -r root@connect.westd.seetacloud.com:/root/autodl-tmp/openpi/checkpoints/pi05_base_arx5_tie_shoes_full/tie_shoes_full_100_episodes_torch/20000 .
+```
+
+#### Network Testing
+
+```bash
+# Test policy server connectivity
+nc -zv 192.168.2.215 8000
+
+# Run BiARX5 client with tactile sensors
+python -m examples.bi_arx5_real.main \
+    --args.host 192.168.2.215 \
+    --args.port 8000 \
+    --args.dry_run \
+    --args.enable_tactile_sensors
+```
+
+---
+
+## License
+
+This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENSE) file for details.
+
+## Acknowledgments
+
+This repository is based on the original [OpenPI](https://github.com/Physical-Intelligence/openpi) project by Physical Intelligence. We thank the Physical Intelligence team for open-sourcing their excellent work on vision-language-action models.
