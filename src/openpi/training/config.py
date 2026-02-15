@@ -17,6 +17,7 @@ import openpi.models.model as _model
 import openpi.models.pi0_config as pi0_config
 import openpi.models.pi0_fast as pi0_fast
 import openpi.models.tokenizer as _tokenizer
+import openpi.policies.aloha_policy as aloha_policy
 import openpi.policies.droid_policy as droid_policy
 import openpi.policies.xense_flare_policy as xense_flare_policy
 import openpi.rtc.configuration_rtc as _rtc_config
@@ -260,8 +261,10 @@ class LeRobotAlohaDataConfig(DataConfigFactory):
 
     @override
     def create(self, assets_dirs: pathlib.Path, model_config: _model.BaseModelConfig) -> DataConfig:
-        # Generic transforms without policy-specific dependencies
-        data_transforms = _transforms.Group(inputs=[], outputs=[])
+        data_transforms = _transforms.Group(
+            inputs=[aloha_policy.AlohaInputs(adapt_to_pi=self.adapt_to_pi)],
+            outputs=[aloha_policy.AlohaOutputs(adapt_to_pi=self.adapt_to_pi)],
+        )
 
         if self.use_delta_joint_actions:
             # Standard dual-arm manipulation: 6 joints per arm + 1 gripper per arm = 14 dims
