@@ -89,11 +89,11 @@ We provide multiple base VLA model checkpoints. These checkpoints have been pre-
 
 We also provide "expert" checkpoints for various robot platforms and tasks. These models are fine-tuned from the base models above and intended to run directly on the target robot. These may or may not work on your particular robot. Since these checkpoints were fine-tuned on relatively small datasets collected with the DROID Franka setup, they might not generalize to your particular setup, though we found the DROID checkpoint to generalize quite broadly in practice.
 
-| Model                    | Use Case                | Description                                                                                                                                                                                                                           | Checkpoint Path                                       |
-| ------------------------ | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
-| $\pi_0$-FAST-DROID       | Inference               | $\pi_0$-FAST model fine-tuned on the [DROID dataset](https://droid-dataset.github.io/): can perform a wide range of simple table-top manipulation tasks 0-shot in new scenes on the DROID robot platform                              | `gs://openpi-assets/checkpoints/pi0_fast_droid`       |
-| $\pi_0$-DROID            | Fine-Tuning             | $\pi_0$ model fine-tuned on the [DROID dataset](https://droid-dataset.github.io/): faster inference than $\pi_0$-FAST-DROID, but may not follow language commands as well                                                             | `gs://openpi-assets/checkpoints/pi0_droid`            |
-| $\pi_{0.5}$-DROID        | Inference / Fine-Tuning | $\pi_{0.5}$ model fine-tuned on the [DROID dataset](https://droid-dataset.github.io/) with [knowledge insulation](https://www.physicalintelligence.company/research/knowledge_insulation): fast inference and good language-following | `gs://openpi-assets/checkpoints/pi05_droid`           |
+| Model              | Use Case                | Description                                                                                                                                                                                                                           | Checkpoint Path                                 |
+| ------------------ | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
+| $\pi_0$-FAST-DROID | Inference               | $\pi_0$-FAST model fine-tuned on the [DROID dataset](https://droid-dataset.github.io/): can perform a wide range of simple table-top manipulation tasks 0-shot in new scenes on the DROID robot platform                              | `gs://openpi-assets/checkpoints/pi0_fast_droid` |
+| $\pi_0$-DROID      | Fine-Tuning             | $\pi_0$ model fine-tuned on the [DROID dataset](https://droid-dataset.github.io/): faster inference than $\pi_0$-FAST-DROID, but may not follow language commands as well                                                             | `gs://openpi-assets/checkpoints/pi0_droid`      |
+| $\pi_{0.5}$-DROID  | Inference / Fine-Tuning | $\pi_{0.5}$ model fine-tuned on the [DROID dataset](https://droid-dataset.github.io/) with [knowledge insulation](https://www.physicalintelligence.company/research/knowledge_insulation): fast inference and good language-following | `gs://openpi-assets/checkpoints/pi05_droid`     |
 
 By default, checkpoints are automatically downloaded from `gs://openpi-assets` and are cached in `~/.cache/openpi` when needed. You can overwrite the download path by setting the `OPENPI_DATA_HOME` environment variable.
 
@@ -177,6 +177,7 @@ python scripts/serve_policy.py policy:checkpoint --policy.config=pi05_base_arx5_
 This will spin up a server that listens on port 8000 and waits for observations to be sent to it. We can then run an evaluation script (or robot runtime) that queries the server.
 
 For more detailed examples of running inference on specific platforms, see:
+
 - [DROID README](examples/droid/README.md) for DROID platform
 - [BiARX5 README](examples/bi_arx5_real/README.md) for Xense platform
 
@@ -325,7 +326,6 @@ We will collect common issues and their solutions here. If you encounter an issu
 | Action dimensions mismatch                | Verify your data processing transforms match the expected input/output dimensions of your robot. Check the action space definitions in your policy classes.                                                                                                                                                                                                                                                                                                                                                         |
 | Diverging training loss                   | Check the `q01`, `q99`, and `std` values in `norm_stats.json` for your dataset. Certain dimensions that are rarely used can end up with very small `q01`, `q99`, or `std` values, leading to huge states and actions after normalization. You can manually adjust the norm stats as a workaround.                                                                                                                                                                                                                   |
 
-
 ---
 
 ## 🤖 Xense Platform Training & Deployment
@@ -339,7 +339,7 @@ This section contains production-ready commands for training and deploying model
 
 ### Environment Setup for Training
 
-```bash
+````bash
 # Start a tmux session
 tmux new -s training
 
@@ -415,6 +415,14 @@ XLA_PYTHON_CLIENT_MEM_FRACTION=0.9 python scripts/train.py pi05_base_xense_flare
 # 20260202 tie shoes 50 episodes lora no adjust training time rtc
 python scripts/compute_norm_stats.py --config-name tie_shoes_50_episodes_lora_no_adjust_training_time_rtc_0202
 XLA_PYTHON_CLIENT_MEM_FRACTION=0.9 python scripts/train.py tie_shoes_50_episodes_lora_no_adjust_training_time_rtc_0202 --exp-name=tie_shoes_50_episodes_lora_no_adjust_training_time_rtc_0202 --overwrite / --resume
+
+# 20260228 xense flare open lock training time rtc
+python scripts/compute_norm_stats.py --config-name pi05_base_xense_flare_open_lock_rtc_0228
+XLA_PYTHON_CLIENT_MEM_FRACTION=0.9 python scripts/train.py pi05_base_xense_flare_open_lock_rtc_0228 --exp-name=xense_flare_open_lock_rtc_0228 --overwrite / --resume
+
+# watch gpu temperature, power, fan speed, clocks, utilization
+watch -n 1 'sensors | grep -E "Package|Core (0|4|8|12|16)" && echo "---" && nvidia-smi --query-gpu=temperature.gpu,power.draw,fan.speed,clocks.gr,clocks.mem,utilization.gpu --format=csv'
+
 ## inference time commands
 copy checkpoints from autodl server to local server
 ```bash
