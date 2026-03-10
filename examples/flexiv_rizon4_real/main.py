@@ -107,15 +107,17 @@ class Args:
         "cartesian_motion_force_control"  # "joint_impedance_control" or "cartesian_motion_force_control"
     )
     use_gripper: bool = True
+    gripper_type: str = "flare_gripper"  # "xense_gripper" or "flare_gripper"
     use_force: bool = False
-    go_to_start: bool = True
+    use_joint_observation: bool = False
+    go_to_start: bool = False
     log_level: str = "INFO"
 
-    # Flare gripper settings
-    flare_gripper_mac_addr: str = "e2b26adbb104"
-    flare_gripper_cam_size: tuple[int, int] = (640, 480)
-    flare_gripper_rectify_size: tuple[int, int] = (200, 350)
-    flare_gripper_max_pos: float = 85.0
+    # Gripper settings
+    gripper_mac_addr: str = "e2b26adbb104"
+    gripper_cam_size: tuple[int, int] = (640, 480)
+    gripper_rectify_size: tuple[int, int] = (400, 700)
+    gripper_max_pos: float = 85.0
 
     # Image rendering
     render_height: int = 224
@@ -123,7 +125,7 @@ class Args:
 
     # Runtime settings
     action_horizon: int = 30
-    runtime_hz: float = 10.0
+    runtime_hz: float = 25.0
     num_episodes: int = 1
     max_episode_steps: int = 100000
 
@@ -134,7 +136,7 @@ class Args:
     rtc_enabled: bool = False
     action_queue_size_to_get_new_actions: int = 20
     execution_horizon: int = 30
-    blend_steps: int = 5
+    blend_steps: int = 3
     default_delay: int = 2
 
 
@@ -152,16 +154,18 @@ def main(args: Args) -> None:
         robot_sn=args.robot_sn,
         control_mode=args.control_mode,
         use_gripper=args.use_gripper,
+        gripper_type=args.gripper_type,
         use_force=args.use_force,
+        use_joint_observation=args.use_joint_observation,
         go_to_start=args.go_to_start,
         log_level=args.log_level,
         render_height=args.render_height,
         render_width=args.render_width,
         setup_robot=True,
-        flare_gripper_mac_addr=args.flare_gripper_mac_addr,
-        flare_gripper_cam_size=args.flare_gripper_cam_size,
-        flare_gripper_rectify_size=args.flare_gripper_rectify_size,
-        flare_gripper_max_pos=args.flare_gripper_max_pos,
+        gripper_mac_addr=args.gripper_mac_addr,
+        gripper_cam_size=args.gripper_cam_size,
+        gripper_rectify_size=args.gripper_rectify_size,
+        gripper_max_pos=args.gripper_max_pos,
     )
 
     # If dry run mode, wrap the environment with DryRunEnvironmentWrapper

@@ -18,6 +18,7 @@ logger = get_logger("FlexivRizon4RealEnv")
 # Constants for Flexiv Rizon4
 JOINT_DOF = 7  # 7-DOF robot
 CARTESIAN_STATE_DIM = 10  # x, y, z, r6d[6], gripper_pos
+JOINT_STATE_DIM = 22  # joint pos (7D) + vel (7D) + effort (7D) + gripper (1D)
 
 
 class FlexivRizon4RealEnv:
@@ -29,54 +30,50 @@ class FlexivRizon4RealEnv:
         JOINT_IMPEDANCE mode (8 dimensions):
             [joint_1.pos, ..., joint_7.pos, gripper_pos]
 
-        CARTESIAN_MOTION_FORCE mode (10 dimensions with 6D rotation):
+        CARTESIAN_MOTION_FORCE mode, use_joint_observation=False (10 dimensions):
             [tcp.x, tcp.y, tcp.z, tcp.r1, tcp.r2, tcp.r3, tcp.r4, tcp.r5, tcp.r6, gripper.pos]
 
-            Where tcp.r1-tcp.r6 is the 6D rotation representation (first two columns of rotation matrix):
-            - [tcp.r1, tcp.r2, tcp.r3]: First column of rotation matrix
-            - [tcp.r4, tcp.r5, tcp.r6]: Second column of rotation matrix
+        CARTESIAN_MOTION_FORCE mode, use_joint_observation=True (22 dimensions):
+            [joint_1.pos..7, joint_1.vel..7, joint_1.effort..7, gripper.pos]
 
     Observation space:
-        {"qpos": state array (8D or 10D depending on control mode),
-         "images": {"wrist_cam": (H,W,3), "left_tactile": (H,W,3), "right_tactile": (H,W,3), ...}}
+        {"qpos": state array, "images": {"wrist_cam": (H,W,3), "top": (H,W,3), ...}}
     """
 
     def __init__(
         self,
-        robot_sn: str = "Rizon4-063423",
-        control_mode: str = "joint_impedance_control",
+        robot_sn: str = "Rizon4-062855",
+        control_mode: str = "cartesian_motion_force_control",
         use_gripper: bool = True,
+        gripper_type: str = "flare_gripper",
         use_force: bool = False,
+        use_joint_observation: bool = False,
         go_to_start: bool = True,
         log_level: str = "INFO",
         setup_robot: bool = True,
-        # Flare gripper settings
-        flare_gripper_mac_addr: str = "e2b26adbb104",
-        flare_gripper_cam_size: tuple[int, int] = (640, 480),
-        flare_gripper_rectify_size: tuple[int, int] = (400, 700),
-        flare_gripper_max_pos: float = 85.0,
-        # External cameras (scene cameras)
-        cameras: dict | None = None,
+        # Gripper settings
+        gripper_mac_addr: str = "bef1504b5391",
+        gripper_cam_size: tuple[int, int] = (640, 480),
+        gripper_rectify_size: tuple[int, int] = (400, 700),
+        gripper_max_pos: float = 85.0,
     ):
-        # Convert control_mode string to enum
         control_mode_enum = ControlMode(control_mode)
 
-        # Create FlexivRizon4 config
         self.config = FlexivRizon4Config(
             robot_sn=robot_sn,
             control_mode=control_mode_enum,
             use_gripper=use_gripper,
+            gripper_type=gripper_type,
             use_force=use_force,
+            use_joint_observation=use_joint_observation,
             go_to_start=go_to_start,
             log_level=log_level,
-            flare_gripper_mac_addr=flare_gripper_mac_addr,
-            flare_gripper_cam_size=flare_gripper_cam_size,
-            flare_gripper_rectify_size=flare_gripper_rectify_size,
-            flare_gripper_max_pos=flare_gripper_max_pos,
-            cameras=cameras or {},
+            gripper_mac_addr=gripper_mac_addr,
+            gripper_cam_size=gripper_cam_size,
+            gripper_rectify_size=gripper_rectify_size,
+            gripper_max_pos=gripper_max_pos,
         )
 
-        # Create robot instance
         self.robot = make_robot_from_config(self.config)
 
         if setup_robot:
@@ -96,40 +93,46 @@ class FlexivRizon4RealEnv:
         """Get state from observation.
 
         Returns:
-            For JOINT_IMPEDANCE mode: [joint_1.pos, ..., joint_7.pos, gripper.pos] (8D)
-            For CARTESIAN_MOTION_FORCE mode: [tcp.x, tcp.y, tcp.z, tcp.r1, ..., tcp.r6, gripper.pos] (10D)
+            JOINT_IMPEDANCE:
+                [joint_1.pos, ..., joint_7.pos, gripper.pos] (8D)
+            CARTESIAN_MOTION_FORCE + use_joint_observation=False:
+                [tcp.x, tcp.y, tcp.z, tcp.r1, ..., tcp.r6, gripper.pos] (10D)
+            CARTESIAN_MOTION_FORCE + use_joint_observation=True:
+                [joint_1.pos..7, joint_1.vel..7, joint_1.effort..7, gripper.pos] (22D)
         """
         if self.config.control_mode == ControlMode.JOINT_IMPEDANCE:
-            # Joint positions (7D) + gripper (1D)
             joints = [obs[f"joint_{i}.pos"] for i in range(1, JOINT_DOF + 1)]
             gripper = [obs["gripper.pos"]]
             return np.array(joints + gripper, dtype=np.float32)
 
         if self.config.control_mode == ControlMode.CARTESIAN_MOTION_FORCE:
-            # Position (3D)
-            position = [obs["tcp.x"], obs["tcp.y"], obs["tcp.z"]]
-            # 6D rotation representation (6D)
-            rotation = [obs[f"tcp.r{i + 1}"] for i in range(6)]
-            # Gripper (1D)
-            gripper = [obs["gripper.pos"]]
-
-            return np.array(position + rotation + gripper, dtype=np.float32)
+            if self.config.use_joint_observation:
+                # Joint pos + vel + effort (21D) + gripper (1D)
+                pos = [obs[f"joint_{i}.pos"] for i in range(1, JOINT_DOF + 1)]
+                vel = [obs[f"joint_{i}.vel"] for i in range(1, JOINT_DOF + 1)]
+                effort = [obs[f"joint_{i}.effort"] for i in range(1, JOINT_DOF + 1)]
+                gripper = [obs["gripper.pos"]]
+                return np.array(pos + vel + effort + gripper, dtype=np.float32)
+            else:
+                # TCP pose (9D) + gripper (1D)
+                position = [obs["tcp.x"], obs["tcp.y"], obs["tcp.z"]]
+                rotation = [obs[f"tcp.r{i + 1}"] for i in range(6)]
+                gripper = [obs["gripper.pos"]]
+                return np.array(position + rotation + gripper, dtype=np.float32)
 
         raise ValueError(f"Unsupported control_mode: {self.config.control_mode}")
 
     def get_images(self, obs: dict) -> dict:
         """Get camera images from observation.
 
-        Returns dictionary with camera images:
-        - wrist_cam: from Flare gripper
-        - left_tactile, right_tactile: tactile sensors from Flare gripper
-        - Additional external cameras if configured
+        Returns dictionary with all available camera images:
+        - wrist_cam: from gripper wrist camera
+        - left_tactile, right_tactile: tactile sensors
+        - top: external RealSense scene camera (if configured)
         """
         images = {}
-
-        # Camera names from Flare gripper and external cameras
+        # Collect all possible image keys (gripper + external cameras)
         camera_names = ["wrist_cam", "left_tactile", "right_tactile"]
-        # Add external camera names from config
         camera_names.extend(self.config.cameras.keys())
 
         for cam_name in camera_names:
@@ -173,47 +176,28 @@ class FlexivRizon4RealEnv:
         """Execute action on the robot.
 
         Args:
-            action: For JOINT_IMPEDANCE mode: [joint_1.pos, ..., joint_7.pos, gripper.pos] (8D)
-                    For CARTESIAN_MOTION_FORCE mode: [tcp.x, tcp.y, tcp.z, tcp.r1, ..., tcp.r6, gripper.pos] (10D)
+            action:
+                JOINT_IMPEDANCE: [joint_1.pos, ..., joint_7.pos, gripper.pos] (8D)
+                CARTESIAN_MOTION_FORCE: [tcp.x, tcp.y, tcp.z, tcp.r1-r6, gripper.pos] (10D)
         """
-        # Convert action array to dictionary format expected by FlexivRizon4
         action_dict = {}
 
         if self.config.control_mode == ControlMode.JOINT_IMPEDANCE:
-            # Joint positions (7D) + gripper (1D)
             for i in range(JOINT_DOF):
                 action_dict[f"joint_{i + 1}.pos"] = float(action[i])
-
-            gripper_pos = float(action[JOINT_DOF])
-            if gripper_pos < 0:
-                gripper_pos = 0
-            elif gripper_pos > 1:
-                gripper_pos = 1
-            action_dict["gripper.pos"] = gripper_pos
+            action_dict["gripper.pos"] = float(np.clip(action[JOINT_DOF], 0.0, 1.0))
 
         elif self.config.control_mode == ControlMode.CARTESIAN_MOTION_FORCE:
-            # action format: [x, y, z, r1-r6, gripper_pos]
-            # Position (3D) - from indices 0, 1, 2
             action_dict["tcp.x"] = float(action[0])
             action_dict["tcp.y"] = float(action[1])
             action_dict["tcp.z"] = float(action[2])
-
-            # 6D rotation representation (6D) - from indices 3-8
             for i in range(6):
                 action_dict[f"tcp.r{i + 1}"] = float(action[3 + i])
-
-            # Gripper (1D) - from index 9
-            gripper_pos = float(action[9])
-            if gripper_pos < 0:
-                gripper_pos = 0
-            elif gripper_pos > 1:
-                gripper_pos = 1
-            action_dict["gripper.pos"] = gripper_pos
+            action_dict["gripper.pos"] = float(np.clip(action[9], 0.0, 1.0))
 
         else:
             raise ValueError(f"Unsupported control_mode: {self.config.control_mode}")
 
-        # Send action to robot
         try:
             self.robot.send_action(action_dict)
         except Exception as e:
@@ -236,35 +220,37 @@ class FlexivRizon4RealEnv:
                 time.sleep(1)
                 logger.info("Flexiv Rizon4 robot disconnected")
             except Exception as e:
-                logger.warn(f"Error during Flexiv Rizon4 disconnect: {e}")
+                logger.warning(f"Error during Flexiv Rizon4 disconnect: {e}")
 
 
 def make_flexiv_rizon4_real_env(
-    robot_sn: str = "Rizon4-063423",
-    control_mode: str = "joint_impedance_control",
+    robot_sn: str = "Rizon4-062855",
+    control_mode: str = "cartesian_motion_force_control",
     use_gripper: bool = True,
+    gripper_type: str = "xense_gripper",
     use_force: bool = False,
+    use_joint_observation: bool = False,
     go_to_start: bool = True,
     log_level: str = "INFO",
     setup_robot: bool = True,
-    flare_gripper_mac_addr: str = "e2b26adbb104",
-    flare_gripper_cam_size: tuple[int, int] = (640, 480),
-    flare_gripper_rectify_size: tuple[int, int] = (400, 700),
-    flare_gripper_max_pos: float = 85.0,
-    cameras: dict | None = None,
+    gripper_mac_addr: str = "bef1504b5391",
+    gripper_cam_size: tuple[int, int] = (640, 480),
+    gripper_rectify_size: tuple[int, int] = (400, 700),
+    gripper_max_pos: float = 85.0,
 ) -> FlexivRizon4RealEnv:
     """Create Flexiv Rizon4 real environment."""
     return FlexivRizon4RealEnv(
         robot_sn=robot_sn,
         control_mode=control_mode,
         use_gripper=use_gripper,
+        gripper_type=gripper_type,
         use_force=use_force,
+        use_joint_observation=use_joint_observation,
         go_to_start=go_to_start,
         log_level=log_level,
         setup_robot=setup_robot,
-        flare_gripper_mac_addr=flare_gripper_mac_addr,
-        flare_gripper_cam_size=flare_gripper_cam_size,
-        flare_gripper_rectify_size=flare_gripper_rectify_size,
-        flare_gripper_max_pos=flare_gripper_max_pos,
-        cameras=cameras,
+        gripper_mac_addr=gripper_mac_addr,
+        gripper_cam_size=gripper_cam_size,
+        gripper_rectify_size=gripper_rectify_size,
+        gripper_max_pos=gripper_max_pos,
     )
