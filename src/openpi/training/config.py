@@ -838,6 +838,48 @@ _CONFIGS = [
         num_workers=1,  # default 2
         fsdp_devices=1,  # refer line 359
     ),
+    TrainConfig(
+        name="pi05_base_arx5_lora_cucumber_peeling_bigforce",
+        model=pi0_config.Pi0Config(
+            paligemma_variant="gemma_2b_lora",
+            action_expert_variant="gemma_300m_lora",
+            pi05=True,
+        ),
+        data=LeRobotAlohaDataConfig(
+            repo_id="Vertax/pi_cucumber_peeling_1231",  # your datasets repo_id
+            repack_transforms=_transforms.Group(
+                inputs=[
+                    _transforms.RepackTransform(
+                        {
+                            "images": {
+                                "cam_high": "observation.images.head",
+                                "cam_left_wrist": "observation.images.left_wrist",
+                                "cam_right_wrist": "observation.images.right_wrist",
+                            },
+                            "state": "observation.state",
+                            "actions": "action",
+                            "prompt": "prompt",
+                        }
+                    )
+                ]
+            ),
+            base_config=DataConfig(
+                prompt_from_task=True,  # Set to True for prompt by task_name
+            ),
+        ),
+        freeze_filter=pi0_config.Pi0Config(
+            pi05=True,
+            paligemma_variant="gemma_2b_lora",
+            action_expert_variant="gemma_300m_lora",
+        ).get_freeze_filter(),
+        batch_size=64,  # the total batch_size not pre_gpu batch_size
+        weight_loader=weight_loaders.CheckpointWeightLoader(
+            "/home/ubuntu/zhangzhemeng/touch_guide/openpi/checkpoints/pi05_base_arx5_lora_cucumber_peeling/pi05_base_arx5_lora_cucumber_peeling_20251229/19999/params"
+        ),
+        num_train_steps=20_000,
+        num_workers=1,  # default 2
+        fsdp_devices=1,  # refer line 359
+    ),
     #
     # Fine-tuning XenseFlare configs.
     #
