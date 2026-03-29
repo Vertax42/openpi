@@ -18,6 +18,7 @@ import openpi.models.pi0_config as pi0_config
 import openpi.models.pi0_fast as pi0_fast
 import openpi.models.tokenizer as _tokenizer
 import openpi.policies.aloha_policy as aloha_policy
+import openpi.policies.bi_flexiv_policy as bi_flexiv_policy
 import openpi.policies.droid_policy as droid_policy
 import openpi.policies.xense_flare_policy as xense_flare_policy
 import openpi.shared.download as _download
@@ -422,6 +423,72 @@ class LeRobotXenseFlareDataConfig(DataConfigFactory):
 
         if self.use_delta_cartesian_actions:
             delta_action_mask = _transforms.make_bool_mask(9, -1)
+            data_transforms = data_transforms.push(
+                inputs=[_transforms.DeltaActions(delta_action_mask)],
+                outputs=[_transforms.AbsoluteActions(delta_action_mask)],
+            )
+
+        model_transforms = ModelTransformFactory(default_prompt=self.default_prompt)(model_config)
+
+        return dataclasses.replace(
+            self.create_base_config(assets_dirs, model_config),
+            repack_transforms=self.repack_transforms,
+            data_transforms=data_transforms,
+            model_transforms=model_transforms,
+            action_sequence_keys=self.action_sequence_keys,
+        )
+
+
+@dataclasses.dataclass(frozen=True)
+class LeRobotBiFlexivDataConfig(DataConfigFactory):
+    """
+    Data config for BiFlexiv Rizon4 RT dual-arm robot in LeRobot format.
+
+    State/action format (20D, Cartesian with 6D rotation):
+        left_tcp.{x, y, z, r1-r6} (9D) + left_gripper.pos (1D) = 10D
+        right_tcp.{x, y, z, r1-r6} (9D) + right_gripper.pos (1D) = 10D
+
+    Cameras: head, left_wrist, right_wrist.
+    Compatible with Xense/pack_6_cosmetic_bottles_into_carton and similar bi_flexiv datasets.
+    """
+
+    use_delta_cartesian_actions: bool = True
+    # If provided, will be injected into the input data if the "prompt" key is not present.
+    default_prompt: str | None = None
+
+    # Repack transforms: map dataset column names to policy expected format.
+    repack_transforms: tyro.conf.Suppress[_transforms.Group] = dataclasses.field(
+        default=_transforms.Group(
+            inputs=[
+                _transforms.RepackTransform(
+                    {
+                        "images": {
+                            "head": "observation.images.head",
+                            "left_wrist": "observation.images.left_wrist",
+                            "right_wrist": "observation.images.right_wrist",
+                        },
+                        "state": "observation.state",
+                        "actions": "action",
+                        "prompt": "task",
+                    }
+                )
+            ]
+        )
+    )
+    # Action keys that will be used to read the action sequence from the dataset.
+    action_sequence_keys: Sequence[str] = ("action",)
+
+    @override
+    def create(self, assets_dirs: pathlib.Path, model_config: _model.BaseModelConfig) -> DataConfig:
+        data_transforms = _transforms.Group(
+            inputs=[bi_flexiv_policy.BiFlexivInputs()],
+            outputs=[bi_flexiv_policy.BiFlexivOutputs()],
+        )
+
+        if self.use_delta_cartesian_actions:
+            # Dual-arm Cartesian: 18 TCP dims (left 0-8 + right 9-17, all delta) + 2 gripper dims (absolute)
+            # Dataset ordering: [left_tcp(0-8), right_tcp(9-17), left_gripper(18), right_gripper(19)]
+            delta_action_mask = _transforms.make_bool_mask(18, -1, -1)
             data_transforms = data_transforms.push(
                 inputs=[_transforms.DeltaActions(delta_action_mask)],
                 outputs=[_transforms.AbsoluteActions(delta_action_mask)],
@@ -1001,87 +1068,33 @@ _CONFIGS = [
         fsdp_devices=1,  # refer line 359
     ),
     TrainConfig(
-        # This config is for fine-tuning pi05 on the *full* DROID dataset.
-        # We use RLDS data loading to make training on this large dataset tractable.
-        # For fine-tuning on your own DROID dataset, see below.
-        name="pi05_full_droid_finetune",
+        name="pi05_base_bi_flexiv_pack_6_cosmetic_bottles_lora",
         model=pi0_config.Pi0Config(
+            paligemma_variant="gemma_2b_lora",
+            action_expert_variant="gemma_300m",
             pi05=True,
-            action_dim=32,
-            action_horizon=16,
+            enable_training_time_rtc=True,
+            max_delay=10,
         ),
-        data=RLDSDroidDataConfig(
-            repo_id="droid",
-            # Set this to the path to your DROID RLDS dataset (the parent directory of the `droid` directory).
-            rlds_data_dir="/mnt/pi-data/kevin",
-            action_space=droid_rlds_dataset.DroidActionSpace.JOINT_POSITION,
-            assets=AssetsConfig(
-                assets_dir="gs://openpi-assets/checkpoints/pi05_base/assets/",
-                asset_id="droid",
+        data=LeRobotBiFlexivDataConfig(
+            repo_id="Xense/pack_6_cosmetic_bottles_into_carton",
+            use_delta_cartesian_actions=True,
+            default_prompt="Pick up six cosmetic bottles one by one and pack them into the carton box. The box is narrow, so align each bottle carefully and insert it precisely.",
+            base_config=DataConfig(
+                prompt_from_task=True,
             ),
         ),
+        ema_decay=None,
+        freeze_filter=pi0_config.Pi0Config(
+            pi05=True,
+            paligemma_variant="gemma_2b_lora",
+            # action_expert_variant="gemma_300m_lora",
+        ).get_freeze_filter(),
+        batch_size=64,
         weight_loader=weight_loaders.CheckpointWeightLoader("gs://openpi-assets/checkpoints/pi05_base/params"),
-        lr_schedule=_optimizer.CosineDecaySchedule(
-            warmup_steps=1_000,
-            peak_lr=5e-5,
-            decay_steps=1_000_000,
-            decay_lr=5e-5,
-        ),
-        num_train_steps=100_000,
-        batch_size=256,
-        log_interval=100,
-        save_interval=5000,
-        keep_period=10_000,
-        num_workers=0,  # Important: RLDS DataLoader requires num_workers=0, handles multi-processing internally
-    ),
-    TrainConfig(
-        # This config is for fine-tuning pi05-DROID on a custom (smaller) DROID dataset.
-        # Here, we use LeRobot data format (like for all other fine-tuning examples)
-        # To convert your custom DROID dataset (<10s of hours) to LeRobot format, see examples/droid/convert_droid_data_to_lerobot.py
-        name="pi05_droid_finetune",
-        model=pi0_config.Pi0Config(
-            pi05=True,
-            action_dim=32,  # pi05 is trained with 32-dim actions
-            action_horizon=16,
-        ),
-        data=LeRobotDROIDDataConfig(
-            # Replace with your custom DROID LeRobot dataset repo id.
-            repo_id="your_hf_username/my_droid_dataset",
-            base_config=DataConfig(prompt_from_task=True),
-            assets=AssetsConfig(
-                # Important: reuse the original DROID norm stats during fine-tuning!
-                assets_dir="gs://openpi-assets/checkpoints/pi05_droid/assets",
-                asset_id="droid",
-            ),
-        ),
-        weight_loader=weight_loaders.CheckpointWeightLoader("gs://openpi-assets/checkpoints/pi05_droid/params"),
         num_train_steps=20_000,
-        batch_size=32,
-    ),
-    #
-    # Debugging configs.
-    #
-    TrainConfig(
-        name="debug",
-        data=FakeDataConfig(),
-        batch_size=2,
-        model=pi0_config.Pi0Config(paligemma_variant="dummy", action_expert_variant="dummy"),
-        save_interval=100,
-        overwrite=True,
-        exp_name="debug",
-        num_train_steps=10,
-        wandb_enabled=False,
-    ),
-    TrainConfig(
-        name="debug_restore",
-        data=FakeDataConfig(),
-        batch_size=2,
-        model=pi0_config.Pi0Config(paligemma_variant="dummy", action_expert_variant="dummy"),
-        weight_loader=weight_loaders.CheckpointWeightLoader("./checkpoints/debug/debug/9/params"),
-        overwrite=True,
-        exp_name="debug",
-        num_train_steps=10,
-        wandb_enabled=False,
+        num_workers=2,
+        fsdp_devices=1,
     ),
     TrainConfig(
         name="debug_pi05",
