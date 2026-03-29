@@ -1,0 +1,87 @@
+"""OpenPI Environment wrapper for BiFlexiv Rizon4 RT dual-arm robot."""
+
+import einops
+from lerobot.utils.robot_utils import get_logger
+import numpy as np
+from openpi_client import image_tools
+from openpi_client.runtime import environment as _environment
+from typing_extensions import override
+
+import examples.bi_flexiv_rizon4_rt.real_env as _real_env
+
+logger = get_logger("BiFlexivRizon4RTEnv")
+
+
+class BiFlexivRizon4RTEnvironment(_environment.Environment):
+    """OpenPI environment for BiFlexiv Rizon4 RT dual-arm robot.
+
+    Camera name mapping (real → policy):
+        head        -> head
+        left_wrist  -> left_wrist
+        right_wrist -> right_wrist
+        (tactile cameras are silently ignored by the policy)
+    """
+
+    def __init__(
+        self,
+        bi_mount_type: str = "forward",
+        use_force: bool = False,
+        go_to_start: bool = True,
+        stiffness_ratio: float = 0.2,
+        control_frequency: float = 100.0,
+        enable_tactile_sensors: bool = True,
+        log_level: str = "INFO",
+        render_height: int = 224,
+        render_width: int = 224,
+        setup_robot: bool = True,
+    ) -> None:
+        self._env = _real_env.BiFlexivRizon4RTRealEnv(
+            bi_mount_type=bi_mount_type,
+            use_force=use_force,
+            go_to_start=go_to_start,
+            stiffness_ratio=stiffness_ratio,
+            control_frequency=control_frequency,
+            enable_tactile_sensors=enable_tactile_sensors,
+            log_level=log_level,
+            setup_robot=setup_robot,
+        )
+        self._render_height = render_height
+        self._render_width = render_width
+        self._ts = None
+
+    @override
+    def reset(self) -> None:
+        self._ts = self._env.reset()
+
+    @override
+    def is_episode_complete(self) -> bool:
+        return False
+
+    @override
+    def get_observation(self) -> dict:
+        if self._ts is None:
+            raise RuntimeError("Timestep is not set. Call reset() first.")
+
+        obs = self._ts.observation
+        processed_images = {}
+
+        for cam_name, img in obs["images"].items():
+            if "_depth" in cam_name or "tactile" in cam_name:
+                continue
+
+            batch = np.expand_dims(img, axis=0)
+            resized = image_tools.resize_with_pad(batch, self._render_height, self._render_width)[0]
+            # (H, W, C) -> (C, H, W) for OpenPI policy input
+            processed_images[cam_name] = einops.rearrange(resized, "h w c -> c h w")
+
+        return {
+            "state": obs["qpos"],
+            "images": processed_images,
+        }
+
+    @override
+    def apply_action(self, action: dict) -> None:
+        self._ts = self._env.step(action["actions"])
+
+    def disconnect(self) -> None:
+        self._env.disconnect()
