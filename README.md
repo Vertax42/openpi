@@ -498,6 +498,14 @@ python scripts/compute_norm_stats.py --config-name pi05_base_xense_flare_pick_an
 XLA_PYTHON_CLIENT_MEM_FRACTION=0.9 python scripts/train.py pi05_base_xense_flare_pick_and_place_cube \
     --exp-name=xense_flare_pick_and_place_cube_20260115 --overwrite
 ```
+### BiFlexiv Platform
+
+```bash
+# Pack 6 cosmetic bottles into the carton
+python scripts/compute_norm_stats.py --config-name pi05_base_bi_flexiv_pack_6_cosmetic_bottles_lora
+XLA_PYTHON_CLIENT_MEM_FRACTION=0.9 python scripts/train.py pi05_base_bi_flexiv_pack_6_cosmetic_bottles_lora \
+    --exp-name=bi_flexiv_pack_6_cosmetic_bottles_lora_20260329 --overwrite
+```
 
 ### Deployment Commands
 
