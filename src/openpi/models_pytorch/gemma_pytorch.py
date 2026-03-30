@@ -22,7 +22,7 @@ class PaliGemmaWithExpertModel(nn.Module):
         super().__init__()
 
         vlm_config_hf = CONFIG_MAPPING["paligemma"]()
-        vlm_config_hf._vocab_size = 257152  # noqa: SLF001
+        vlm_config_hf._vocab_size = 257152
         vlm_config_hf.image_token_index = 257152
         vlm_config_hf.text_config.hidden_size = vlm_config.width
         vlm_config_hf.text_config.intermediate_size = vlm_config.mlp_dim
@@ -164,7 +164,7 @@ class PaliGemmaWithExpertModel(nn.Module):
                 gates = []
                 for i, hidden_states in enumerate(inputs_embeds):
                     layer = models[i].layers[layer_idx]
-                    hidden_states, gate = layer.input_layernorm(hidden_states, cond=adarms_cond[i])  # noqa: PLW2901
+                    hidden_states, gate = layer.input_layernorm(hidden_states, cond=adarms_cond[i])
                     gates.append(gate)
 
                     input_shape = hidden_states.shape[:-1]
@@ -222,7 +222,7 @@ class PaliGemmaWithExpertModel(nn.Module):
                     out_emb = layer.self_attn.o_proj(att_output[:, start_pos:end_pos])
 
                     # first residual
-                    out_emb = modeling_gemma._gated_residual(hidden_states, out_emb, gates[i])  # noqa: SLF001
+                    out_emb = modeling_gemma._gated_residual(hidden_states, out_emb, gates[i])
                     after_first_residual = out_emb.clone()
                     out_emb, gate = layer.post_attention_layernorm(out_emb, cond=adarms_cond[i])
                     # Convert to bfloat16 if the next layer (mlp) uses bfloat16
@@ -231,7 +231,7 @@ class PaliGemmaWithExpertModel(nn.Module):
 
                     out_emb = layer.mlp(out_emb)
                     # second residual
-                    out_emb = modeling_gemma._gated_residual(after_first_residual, out_emb, gate)  # noqa: SLF001
+                    out_emb = modeling_gemma._gated_residual(after_first_residual, out_emb, gate)
                     outputs_embeds.append(out_emb)
                     start_pos = end_pos
 

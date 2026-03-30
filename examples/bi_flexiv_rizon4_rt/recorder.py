@@ -1,7 +1,7 @@
 """LeRobot-format episode recorder for BiFlexiv Rizon4 RT inference.
 
 Records observations and actions during policy execution in the same format
-as the original training dataset (raw state, raw 640×480 HWC images, absolute actions).
+as the original training dataset (raw state, raw 640x480 HWC images, absolute actions).
 
 Usage:
     from examples.bi_flexiv_rizon4_rt.recorder import make_recorder_subscriber
@@ -16,9 +16,9 @@ Usage:
 
 import pathlib
 
-import numpy as np
 from lerobot.datasets.lerobot_dataset import LeRobotDataset
 from lerobot.utils.robot_utils import get_logger
+import numpy as np
 from openpi_client.runtime import subscriber as _subscriber
 from typing_extensions import override
 
@@ -26,13 +26,26 @@ logger = get_logger("BiFlexivRecorder")
 
 # Feature names matching Xense/pack_6_cosmetic_bottles_into_carton and all bi_flexiv datasets.
 _STATE_NAMES = [
-    "left_tcp.x", "left_tcp.y", "left_tcp.z",
-    "left_tcp.r1", "left_tcp.r2", "left_tcp.r3",
-    "left_tcp.r4", "left_tcp.r5", "left_tcp.r6",
-    "right_tcp.x", "right_tcp.y", "right_tcp.z",
-    "right_tcp.r1", "right_tcp.r2", "right_tcp.r3",
-    "right_tcp.r4", "right_tcp.r5", "right_tcp.r6",
-    "left_gripper.pos", "right_gripper.pos",
+    "left_tcp.x",
+    "left_tcp.y",
+    "left_tcp.z",
+    "left_tcp.r1",
+    "left_tcp.r2",
+    "left_tcp.r3",
+    "left_tcp.r4",
+    "left_tcp.r5",
+    "left_tcp.r6",
+    "right_tcp.x",
+    "right_tcp.y",
+    "right_tcp.z",
+    "right_tcp.r1",
+    "right_tcp.r2",
+    "right_tcp.r3",
+    "right_tcp.r4",
+    "right_tcp.r5",
+    "right_tcp.r6",
+    "left_gripper.pos",
+    "right_gripper.pos",
 ]
 
 _ACTION_NAMES = _STATE_NAMES  # action space identical to state space

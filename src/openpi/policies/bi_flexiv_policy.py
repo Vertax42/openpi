@@ -52,9 +52,7 @@ class BiFlexivInputs(transforms.DataTransformFn):
 
         in_images = data["images"]
         if set(in_images) - set(self.EXPECTED_CAMERAS):
-            raise ValueError(
-                f"Expected images to contain {self.EXPECTED_CAMERAS}, got {tuple(in_images)}"
-            )
+            raise ValueError(f"Expected images to contain {self.EXPECTED_CAMERAS}, got {tuple(in_images)}")
 
         # Assume that head image always exists.
         head_image = in_images["head"]

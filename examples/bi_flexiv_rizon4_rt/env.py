@@ -76,11 +76,7 @@ class BiFlexivRizon4RTEnvironment(_environment.Environment):
 
         # Raw images (original resolution HWC) passed through for recording.
         # Policy cameras only — tactile sensors excluded.
-        raw_images = {
-            cam: img
-            for cam, img in obs["images"].items()
-            if "_depth" not in cam and "tactile" not in cam
-        }
+        raw_images = {cam: img for cam, img in obs["images"].items() if "_depth" not in cam and "tactile" not in cam}
 
         return {
             "state": obs["qpos"],

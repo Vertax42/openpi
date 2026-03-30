@@ -16,9 +16,9 @@ Usage:
 
 import pathlib
 
-import numpy as np
 from lerobot.datasets.lerobot_dataset import LeRobotDataset
 from lerobot.utils.robot_utils import get_logger
+import numpy as np
 from openpi_client.runtime import subscriber as _subscriber
 from typing_extensions import override
 
@@ -120,7 +120,7 @@ class LeRobotRecorderSubscriber(_subscriber.Subscriber):
 def make_recorder_subscriber(
     repo_id: str,
     task: str,
-    fps: int = 25,
+    fps: int = 30,
     root: str | pathlib.Path | None = None,
     image_height: int = 480,
     image_width: int = 640,

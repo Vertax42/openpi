@@ -47,9 +47,7 @@ def load_jax_checkpoint_info(checkpoint_dir: pathlib.Path) -> dict[str, Any]:
     return info
 
 
-def find_wandb_config(
-    wandb_id: str, base_dir: pathlib.Path = None
-) -> dict[str, Any] | None:
+def find_wandb_config(wandb_id: str, base_dir: pathlib.Path | None = None) -> dict[str, Any] | None:
     """Find and load WandB config from local wandb directory."""
     if base_dir is None:
         base_dir = pathlib.Path.cwd()
@@ -202,11 +200,7 @@ Examples:
             if args.json:
                 import yaml
 
-                print(
-                    yaml.dump(
-                        config_values, default_flow_style=False, allow_unicode=True
-                    )
-                )
+                print(yaml.dump(config_values, default_flow_style=False, allow_unicode=True))
             elif args.brief:
                 key_params = [
                     "exp_name",
@@ -235,13 +229,9 @@ Examples:
         else:
             print("Note: JAX checkpoint metadata")
             print("=" * 80)
-            print(
-                "JAX checkpoints don't store training configuration in the checkpoint."
-            )
+            print("JAX checkpoints don't store training configuration in the checkpoint.")
             if wandb_id:
-                print(
-                    "WandB config was not found locally. To find training parameters:"
-                )
+                print("WandB config was not found locally. To find training parameters:")
             else:
                 print("To find training parameters:")
             print("  1. Check the WandB run (if enabled)")
@@ -301,12 +291,11 @@ Examples:
         def convert_to_json(obj):
             if isinstance(obj, dict):
                 return {k: convert_to_json(v) for k, v in obj.items()}
-            elif isinstance(obj, (list, tuple)):
+            if isinstance(obj, (list, tuple)):
                 return [convert_to_json(item) for item in obj]
-            elif hasattr(obj, "__dict__"):
+            if hasattr(obj, "__dict__"):
                 return str(obj)
-            else:
-                return obj
+            return obj
 
         config_json = convert_to_json(config)
         print(json.dumps(config_json, indent=2))

@@ -218,8 +218,7 @@ class Pi0(_model.BaseModel):
         # Delegate to specific implementation
         if not self._enable_training_time_rtc:
             return self._compute_loss_standard(loss_rng, observation, actions)
-        else:
-            return self._compute_loss_training_time_rtc(loss_rng, observation, actions)
+        return self._compute_loss_training_time_rtc(loss_rng, observation, actions)
 
     def _compute_loss_standard(
         self,

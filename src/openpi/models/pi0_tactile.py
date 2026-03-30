@@ -9,13 +9,11 @@ import flax.nnx as nnx
 from flax.nnx import bridge as nnx_bridge
 import jax.numpy as jnp
 
-from openpi.models import model as _model
-from openpi.models import pi0
-from openpi.models import pi0_tactile_config
 from openpi.models import gemma as _gemma
+from openpi.models import model as _model
+from openpi.models import pi0_tactile_config
 from openpi.models import siglip as _siglip
 from openpi.shared import array_typing as at
-
 
 # Visual camera names (compatible with pretrained weights)
 VISUAL_CAMERAS = ("base_0_rgb", "left_wrist_0_rgb", "right_wrist_0_rgb")
@@ -52,11 +50,7 @@ class Pi0Tactile(nnx.Module):
             )
         )
         # Initialize with a fake tactile image
-        fake_tactile_image = next(
-            img
-            for name, img in config.fake_obs().images.items()
-            if name in TACTILE_CAMERAS
-        )
+        fake_tactile_image = next(img for name, img in config.fake_obs().images.items() if name in TACTILE_CAMERAS)
         tactile_img.lazy_init(fake_tactile_image, train=False, rngs=rngs)
 
         # Store tactile encoder
@@ -65,9 +59,7 @@ class Pi0Tactile(nnx.Module):
     @at.typecheck
     def embed_prefix(
         self, obs: _model.Observation
-    ) -> tuple[
-        at.Float[at.Array, "b s emb"], at.Bool[at.Array, "b s"], at.Bool[at.Array, " s"]
-    ]:
+    ) -> tuple[at.Float[at.Array, "b s emb"], at.Bool[at.Array, "b s"], at.Bool[at.Array, " s"]]:
         """Embed prefix with both visual and tactile images.
 
         This overrides the parent method to handle tactile images separately.

@@ -26,14 +26,11 @@ Example usage:
         --dry_run
 """
 
+from dataclasses import dataclass
+from dataclasses import field
 import signal
 import sys
-from dataclasses import dataclass, field
 
-import tyro
-from typing_extensions import override
-
-import examples.flexiv_rizon4_rt.env as _env
 from lerobot.utils.robot_utils import get_logger
 from openpi_client import action_chunk_broker
 from openpi_client import rtc_action_chunk_broker
@@ -41,6 +38,10 @@ from openpi_client import websocket_client_policy as _websocket_client_policy
 from openpi_client.runtime import environment as _environment
 from openpi_client.runtime import runtime as _runtime
 from openpi_client.runtime.agents import policy_agent as _policy_agent
+from typing_extensions import override
+import tyro
+
+import examples.flexiv_rizon4_rt.env as _env
 
 logger = get_logger("FlexivRizon4RTMain")
 
@@ -80,10 +81,18 @@ class DryRunEnvironmentWrapper(_environment.Environment):
             logger.info(f"🎯 Step {self._step_count} - policy output action (10D Cartesian):")
             logger.info(f"{'─'*80}")
 
-            labels = ["tcp.x", "tcp.y", "tcp.z",
-                      "tcp.r1", "tcp.r2", "tcp.r3",
-                      "tcp.r4", "tcp.r5", "tcp.r6",
-                      "gripper.pos"]
+            labels = [
+                "tcp.x",
+                "tcp.y",
+                "tcp.z",
+                "tcp.r1",
+                "tcp.r2",
+                "tcp.r3",
+                "tcp.r4",
+                "tcp.r5",
+                "tcp.r6",
+                "gripper.pos",
+            ]
             for i, (label, value) in enumerate(zip(labels, actions)):
                 logger.info(f"  [{i:2d}] {label:12s}: {value:+.6f}")
 
@@ -119,9 +128,7 @@ class Args:
 
     # RT-specific settings
     stiffness_ratio: float = 0.2
-    start_position_degree: list[float] = field(
-        default_factory=lambda: [-1.70, 4.48, 1.54, 136.22, 0.12, 41.74, -0.18]
-    )
+    start_position_degree: list[float] = field(default_factory=lambda: [-1.70, 4.48, 1.54, 136.22, 0.12, 41.74, -0.18])
     zero_ft_sensor_on_connect: bool = True
     # inner_control_hz: how often the C++ RT callback (1 kHz) consumes a new
     #   Python command. Range [1, 1000]. Default=1000 (every 1 ms cycle).
@@ -259,6 +266,7 @@ def main(args: Args) -> None:
     except Exception as e:
         logger.error(f"\n❌ Runtime error: {e}")
         import traceback
+
         traceback.print_exc()
         raise
     finally:

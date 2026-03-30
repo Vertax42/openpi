@@ -151,10 +151,7 @@ class ActionQueue:
 
         # Log outside lock to avoid blocking get() calls
         if real_delay is not None:
-            logger.info(
-                f"RTC: Truncate at {truncate_delay}, "
-                f"estimated={estimated_delay}, real={real_delay}"
-            )
+            logger.info(f"RTC: Truncate at {truncate_delay}, " f"estimated={estimated_delay}, real={real_delay}")
 
     def _replace_actions_queue(
         self,
@@ -179,9 +176,7 @@ class ActionQueue:
             align_len = min(truncate_idx, remaining_old, len(new_original_actions))
             if align_len > 0:
                 # This is what was passed to model as prev_chunk_left_over
-                old_aligned = self.original_queue[
-                    self.last_index : self.last_index + align_len
-                ]
+                old_aligned = self.original_queue[self.last_index : self.last_index + align_len]
                 new_aligned = new_original_actions[:align_len]
                 diff_rtc = np.abs(new_aligned - old_aligned)
                 max_diff_rtc = np.max(diff_rtc)
@@ -213,11 +208,7 @@ class ActionQueue:
         new_processed = new_processed_actions[truncate_idx:].copy()
 
         # Apply blending if enabled and we have old actions
-        if (
-            self.blend_steps > 0
-            and self.queue is not None
-            and self.last_index < len(self.queue)
-        ):
+        if self.blend_steps > 0 and self.queue is not None and self.last_index < len(self.queue):
             # Get remaining old actions
             old_remaining = self.queue[self.last_index :]
             logger.debug(f"old_remaining steps: {len(old_remaining)}")
@@ -227,20 +218,14 @@ class ActionQueue:
                 # Linear blend: alpha goes from 0 to 1 over blend_steps
                 for i in range(blend_len):
                     alpha = (i + 1) / (blend_len + 1)  # 0 < alpha < 1
-                    new_processed[i] = (1 - alpha) * old_remaining[
-                        i
-                    ] + alpha * new_processed[i]
-                    new_original[i] = (1 - alpha) * self.original_queue[
-                        self.last_index + i
-                    ] + alpha * new_original[i]
+                    new_processed[i] = (1 - alpha) * old_remaining[i] + alpha * new_processed[i]
+                    new_original[i] = (1 - alpha) * self.original_queue[self.last_index + i] + alpha * new_original[i]
 
         self.original_queue = new_original
         self.queue = new_processed
         self.last_index = 0
 
-    def _append_actions_queue(
-        self, new_original_actions: np.ndarray, new_processed_actions: np.ndarray
-    ):
+    def _append_actions_queue(self, new_original_actions: np.ndarray, new_processed_actions: np.ndarray):
         """Append new actions to the queue (non-RTC mode)."""
         if self.queue is None:
             self.original_queue = new_original_actions.copy()
@@ -252,9 +237,7 @@ class ActionQueue:
         self.queue = self.queue[self.last_index :]
 
         # Append new actions
-        self.original_queue = np.concatenate(
-            [self.original_queue, new_original_actions]
-        )
+        self.original_queue = np.concatenate([self.original_queue, new_original_actions])
         self.queue = np.concatenate([self.queue, new_processed_actions])
 
         self.last_index = 0

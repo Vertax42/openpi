@@ -1,13 +1,11 @@
-from typing import List, Optional
-
 import einops
+from lerobot.utils.robot_utils import get_logger
 import numpy as np
 from openpi_client import image_tools
 from openpi_client.runtime import environment as _environment
 from typing_extensions import override
 
 import examples.bi_arx5_real.real_env as _real_env
-from lerobot.utils.robot_utils import get_logger
 
 logger = get_logger("BiARX5Env")
 
@@ -22,7 +20,7 @@ class BiARX5RealEnvironment(_environment.Environment):
         log_level: str = "INFO",
         use_multithreading: bool = True,
         enable_tactile_sensors: bool = False,
-        reset_position: Optional[List[float]] = None,
+        reset_position: list[float] | None = None,
         render_height: int = 224,
         render_width: int = 224,
         setup_robot: bool = True,  # whether to connect robot hardware immediately
@@ -73,21 +71,15 @@ class BiARX5RealEnvironment(_environment.Environment):
             single_img = obs["images"][cam_name]
 
             # debug: print original image info
-            logger.debug(
-                f"Camera {cam_name}: original shape={single_img.shape}, dtype={single_img.dtype}"
-            )
+            logger.debug(f"Camera {cam_name}: original shape={single_img.shape}, dtype={single_img.dtype}")
 
             # expand single image to batch format [1, H, W, C] for resize_with_pad
             batch_img = np.expand_dims(single_img, axis=0)  # [H, W, C] -> [1, H, W, C]
             logger.debug(f"Camera {cam_name}: batch shape={batch_img.shape}")
 
             # resize image to specified resolution
-            resized_batch = image_tools.resize_with_pad(
-                batch_img, self._render_height, self._render_width
-            )
-            logger.debug(
-                f"Camera {cam_name}: resized batch shape={resized_batch.shape}"
-            )
+            resized_batch = image_tools.resize_with_pad(batch_img, self._render_height, self._render_width)
+            logger.debug(f"Camera {cam_name}: resized batch shape={resized_batch.shape}")
 
             # extract first image from batch [1, H, W, C] -> [H, W, C]
             resized_img = resized_batch[0]  # already uint8 format
@@ -101,9 +93,7 @@ class BiARX5RealEnvironment(_environment.Environment):
             "images": processed_images,  # use newly created dict
             # Raw images (original resolution HWC) for recording, depth/tactile excluded.
             "images_raw": {
-                cam: img
-                for cam, img in obs["images"].items()
-                if "_depth" not in cam and "tactile" not in cam
+                cam: img for cam, img in obs["images"].items() if "_depth" not in cam and "tactile" not in cam
             },
             # prompt is injected by policy server's InjectDefaultPrompt, no need to add here
         }

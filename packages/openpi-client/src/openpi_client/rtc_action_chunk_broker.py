@@ -43,15 +43,11 @@ class RTCActionChunkBroker(_base_policy.BasePolicy):
         self._policy = policy
         self._frequency_hz = frequency_hz
         self._time_per_chunk = 1.0 / frequency_hz
-        self._action_queue_size_to_get_new_actions = (
-            action_queue_size_to_get_new_actions
-        )
+        self._action_queue_size_to_get_new_actions = action_queue_size_to_get_new_actions
         self._execution_horizon = execution_horizon
         self._default_delay = default_delay
 
-        self._action_queue = ActionQueue(
-            rtc_enabled=rtc_enabled, blend_steps=blend_steps
-        )
+        self._action_queue = ActionQueue(rtc_enabled=rtc_enabled, blend_steps=blend_steps)
         self._latency_tracker = LatencyTracker()
         self._latest_obs: Optional[Dict] = None
         self._latest_obs_lock = threading.Lock()
@@ -61,14 +57,10 @@ class RTCActionChunkBroker(_base_policy.BasePolicy):
 
         # Track warmup state: first inference is for JIT, second is for real execution
         self._warmup_done = False
-        self._warmup_prev_chunk: Optional[np.ndarray] = (
-            None  # Store first inference result for second inference
-        )
+        self._warmup_prev_chunk: Optional[np.ndarray] = None  # Store first inference result for second inference
 
         self._stop_event = threading.Event()
-        self._first_inference_done = (
-            threading.Event()
-        )  # Signal when actions are ready for execution (after warmup)
+        self._first_inference_done = threading.Event()  # Signal when actions are ready for execution (after warmup)
         self._thread = threading.Thread(target=self._get_actions_loop, daemon=True)
         self._thread_started = False
 
@@ -82,10 +74,7 @@ class RTCActionChunkBroker(_base_policy.BasePolicy):
         while not self._stop_event.is_set():
             try:
                 # Check if we need more actions
-                if (
-                    self._action_queue.qsize()
-                    <= self._action_queue_size_to_get_new_actions
-                ):
+                if self._action_queue.qsize() <= self._action_queue_size_to_get_new_actions:
                     # Get latest observation
                     with self._latest_obs_lock:
                         obs = self._latest_obs
@@ -97,9 +86,7 @@ class RTCActionChunkBroker(_base_policy.BasePolicy):
 
                     # Prepare for inference
                     current_time = time.perf_counter()
-                    action_index_before_inference = (
-                        self._action_queue.get_action_index()
-                    )
+                    action_index_before_inference = self._action_queue.get_action_index()
 
                     # Determine prev_chunk_left_over and estimated_delay based on warmup state
                     if not self._warmup_done:
@@ -191,9 +178,7 @@ class RTCActionChunkBroker(_base_policy.BasePolicy):
 
                     # Normal operation: merge actions into queue
                     # Skip CRITICAL check during warmup (Phase 2) since JIT causes high latency
-                    if not self._warmup_done or inference_delay_steps < len(
-                        processed_actions
-                    ):
+                    if not self._warmup_done or inference_delay_steps < len(processed_actions):
                         pass  # OK
                     else:
                         logger.error(
@@ -203,10 +188,7 @@ class RTCActionChunkBroker(_base_policy.BasePolicy):
                         )
 
                     merge_start = time.perf_counter()
-                    real_delay_before_merge = (
-                        self._action_queue.get_action_index()
-                        - action_index_before_inference
-                    )
+                    real_delay_before_merge = self._action_queue.get_action_index() - action_index_before_inference
                     self._action_queue.merge(
                         new_original_actions=original_actions,
                         new_processed_actions=processed_actions,
@@ -233,9 +215,7 @@ class RTCActionChunkBroker(_base_policy.BasePolicy):
 
                     # Signal that first inference is done (queue now has actions)
                     if not self._first_inference_done.is_set():
-                        logger.info(
-                            "First inference completed, action queue initialized"
-                        )
+                        logger.info("First inference completed, action queue initialized")
                         self._first_inference_done.set()
                 else:
                     # Sleep to prevent busy waiting

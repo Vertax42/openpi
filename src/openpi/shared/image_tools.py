@@ -15,10 +15,7 @@ def resize_with_pad(
     height: int,
     width: int,
     method: jax.image.ResizeMethod = jax.image.ResizeMethod.LINEAR,
-) -> (
-    at.UInt8[at.Array, "*b {height} {width} c"]
-    | at.Float[at.Array, "*b {height} {width} c"]
-):
+) -> at.UInt8[at.Array, "*b {height} {width} c"] | at.Float[at.Array, "*b {height} {width} c"]:
     """Replicates tf.image.resize_with_pad. Resizes an image to a target height and width without distortion
     by padding with black. If the image is float32, it must be in the range [-1, 1].
     """
@@ -127,12 +124,8 @@ def resize_with_pad_torch(
 
     # Convert back to original format if needed
     if channels_last:
-        padded_images = padded_images.permute(
-            0, 2, 3, 1
-        )  # [b, c, h, w] -> [b, h, w, c]
+        padded_images = padded_images.permute(0, 2, 3, 1)  # [b, c, h, w] -> [b, h, w, c]
         if batch_size == 1 and images.shape[0] == 1:
-            padded_images = padded_images.squeeze(
-                0
-            )  # Remove batch dimension if it was added
+            padded_images = padded_images.squeeze(0)  # Remove batch dimension if it was added
 
     return padded_images

@@ -7,11 +7,10 @@ the standard camera images.
 import dataclasses
 from typing import ClassVar
 
-import numpy as np
 import einops
+import numpy as np
 
 import openpi.transforms as transforms
-from openpi.policies import aloha_policy
 
 
 def make_aloha_tactile_example() -> dict:
@@ -58,9 +57,7 @@ class AlohaTactileInputs(transforms.DataTransformFn):
 
         in_images = data["images"]
         if set(in_images) - set(self.EXPECTED_CAMERAS):
-            raise ValueError(
-                f"Expected images to contain subset of {self.EXPECTED_CAMERAS}, got {tuple(in_images)}"
-            )
+            raise ValueError(f"Expected images to contain subset of {self.EXPECTED_CAMERAS}, got {tuple(in_images)}")
 
         # Base image must exist
         base_image = in_images["cam_high"]

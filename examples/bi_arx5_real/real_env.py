@@ -1,15 +1,14 @@
 import collections
 import time
-from typing import List, Optional
 
 import dm_env
-import numpy as np
 
 # import lerobot bi_arx5 config and make_robot_from_config
-from lerobot.robots.bi_arx5.config_bi_arx5 import BiARX5Config, BiARX5ControlMode
+from lerobot.robots.bi_arx5.config_bi_arx5 import BiARX5Config
+from lerobot.robots.bi_arx5.config_bi_arx5 import BiARX5ControlMode
 from lerobot.robots.utils import make_robot_from_config
-
 from lerobot.utils.robot_utils import get_logger
+import numpy as np
 
 logger = get_logger("BiARX5RealEnv")
 
@@ -48,15 +47,13 @@ class BiARX5RealEnv:
         log_level: str = "INFO",
         use_multithreading: bool = True,
         enable_tactile_sensors: bool = False,
-        reset_position: Optional[List[float]] = None,
+        reset_position: list[float] | None = None,
         setup_robot: bool = True,
         controller_dt: float = 0.002,  # low-level control frequency (seconds)
         preview_time: float = 0.02,  # preview time (seconds)
         control_mode: str = "teach_mode",
     ):
-        self._reset_position = (
-            reset_position if reset_position else DEFAULT_RESET_POSITION
-        )
+        self._reset_position = reset_position if reset_position else DEFAULT_RESET_POSITION
 
         # convert control_mode string to enum
         control_mode_enum = BiARX5ControlMode(control_mode)
@@ -175,9 +172,7 @@ class BiARX5RealEnv:
 
         # check left arm joints (index 0-5)
         left_joints = action[0:6]
-        for i, (val, min_val, max_val) in enumerate(
-            zip(left_joints, JOINT_POS_MIN, JOINT_POS_MAX)
-        ):
+        for i, (val, min_val, max_val) in enumerate(zip(left_joints, JOINT_POS_MIN, JOINT_POS_MAX)):
             if val < min_val or val > max_val:
                 return (
                     False,
@@ -194,9 +189,7 @@ class BiARX5RealEnv:
 
         # check right arm joints (index 7-12)
         right_joints = action[7:13]
-        for i, (val, min_val, max_val) in enumerate(
-            zip(right_joints, JOINT_POS_MIN, JOINT_POS_MAX)
-        ):
+        for i, (val, min_val, max_val) in enumerate(zip(right_joints, JOINT_POS_MIN, JOINT_POS_MAX)):
             if val < min_val or val > max_val:
                 return (
                     False,
@@ -223,9 +216,7 @@ class BiARX5RealEnv:
 
         # ensure robot is in normal position control mode (not gravity compensation mode)
         if self.robot.is_gravity_compensation_mode():
-            logger.info(
-                "Switching from gravity compensation to normal position control for action execution"
-            )
+            logger.info("Switching from gravity compensation to normal position control for action execution")
             self.robot.set_to_normal_position_control()
         # else:
         #     logger.info("Robot is already in normal position control mode")

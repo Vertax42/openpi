@@ -26,7 +26,7 @@ import torch
 # the problem is that custom PyTree nodes are sometimes initialized with arbitrary types (e.g., `jax.ShapeDtypeStruct`,
 # `jax.Sharding`, or even <object>) due to JAX tracing operations. this patch skips typechecking when the stack trace
 # contains `jax._src.tree_util`, which should only be the case during tree unflattening.
-_original_check_dataclass_annotations = jaxtyping._decorator._check_dataclass_annotations  # noqa: SLF001
+_original_check_dataclass_annotations = jaxtyping._decorator._check_dataclass_annotations
 # Redefine Array to include both JAX arrays and PyTorch tensors
 Array = jax.Array | torch.Tensor
 
@@ -40,7 +40,7 @@ def _check_dataclass_annotations(self, typechecker):
     return None
 
 
-jaxtyping._decorator._check_dataclass_annotations = _check_dataclass_annotations  # noqa: SLF001
+jaxtyping._decorator._check_dataclass_annotations = _check_dataclass_annotations
 
 KeyArrayLike: TypeAlias = jax.typing.ArrayLike
 Params: TypeAlias = PyTree[Float[ArrayLike, "..."]]

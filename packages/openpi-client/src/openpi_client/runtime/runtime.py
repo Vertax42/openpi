@@ -101,18 +101,17 @@ class Runtime:
         t4 = time.time()
 
         if self._environment.is_episode_complete() or (
-            self._max_episode_steps > 0
-            and self._episode_steps >= self._max_episode_steps
+            self._max_episode_steps > 0 and self._episode_steps >= self._max_episode_steps
         ):
             self.mark_episode_complete()
 
         # every 20 steps print the detailed timing
         # if self._episode_steps % 20 == 0:
         logger.info(
-                f"⏱️  Runtime _step_time: "
-                f"get_observation={((t1-t0)*1000):.2f}ms | "
-                f"get_action={((t2-t1)*1000):.2f}ms | "
-                f"apply_action={((t3-t2)*1000):.2f}ms | "
-                f"subscriber={((t4-t3)*1000):.2f}ms | "
-                f"total_time={((t4-t0)*1000):.2f}ms"
-            )
+            f"⏱️  Runtime _step_time: "
+            f"get_observation={((t1-t0)*1000):.2f}ms | "
+            f"get_action={((t2-t1)*1000):.2f}ms | "
+            f"apply_action={((t3-t2)*1000):.2f}ms | "
+            f"subscriber={((t4-t3)*1000):.2f}ms | "
+            f"total_time={((t4-t0)*1000):.2f}ms"
+        )

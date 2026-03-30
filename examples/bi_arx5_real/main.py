@@ -1,17 +1,17 @@
 import dataclasses
 
-import tyro
+from lerobot.utils.robot_utils import get_logger
 from openpi_client import action_chunk_broker
 from openpi_client import rtc_action_chunk_broker
 from openpi_client import websocket_client_policy as _websocket_client_policy
+from openpi_client.runtime import environment as _environment
 from openpi_client.runtime import runtime as _runtime
 from openpi_client.runtime.agents import policy_agent as _policy_agent
-from openpi_client.runtime import environment as _environment
 from typing_extensions import override
+import tyro
 
 import examples.bi_arx5_real.env as _env
 import examples.bi_arx5_real.recorder as _recorder
-from lerobot.utils.robot_utils import get_logger
 
 logger = get_logger("BiARX5Main")
 
@@ -29,9 +29,7 @@ class DryRunEnvironmentWrapper(_environment.Environment):
         self._episode_count += 1
         self._step_count = 0
         logger.info(f"\n{'='*80}")
-        logger.info(
-            f"🔄 Episode {self._episode_count} - environment reset (dry run mode)"
-        )
+        logger.info(f"🔄 Episode {self._episode_count} - environment reset (dry run mode)")
         logger.info(f"{'='*80}\n")
         self._wrapped_env.reset()
 
@@ -102,9 +100,7 @@ class DryRunEnvironmentWrapper(_environment.Environment):
             logger.info(f"  right gripper (index 13): {actions[13]:.6f}")
 
             logger.info(f"{'─'*80}")
-            logger.info(
-                "⚠️  dry run mode: action intercepted, not actually executed to robot"
-            )
+            logger.info("⚠️  dry run mode: action intercepted, not actually executed to robot")
             logger.info(f"{'─'*80}\n")
 
 
@@ -125,13 +121,11 @@ class Args:
     action_horizon: int = 30  # action_horizon for actionchunkbroker
 
     # lower controller config
-    controller_dt: float = (
-        0.002  # lower controller frequency, unit: second (0.002s = 2ms = 500Hz)
-    )
+    controller_dt: float = 0.002  # lower controller frequency, unit: second (0.002s = 2ms = 500Hz)
     control_mode: str = "joint_control"
     enable_tactile_sensors: bool = False  # enable tactile sensors, default False
-    preview_time: float = 0.04  # preview time = 1/runtime_hz, for smooth interpolation
-    runtime_hz: int = 25  # runtime frequency, unit: Hz
+    preview_time: float = 0.03  # preview time = 1/runtime_hz, for smooth interpolation
+    runtime_hz: int = 30  # runtime frequency, unit: Hz
     # dry run mode: only print policy output, not actually execute action
     dry_run: bool = False
 

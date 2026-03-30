@@ -18,11 +18,7 @@ import openpi.transforms as transforms
 
 class RemoveStrings(transforms.DataTransformFn):
     def __call__(self, x: dict) -> dict:
-        return {
-            k: v
-            for k, v in x.items()
-            if not np.issubdtype(np.asarray(v).dtype, np.str_)
-        }
+        return {k: v for k, v in x.items() if not np.issubdtype(np.asarray(v).dtype, np.str_)}
 
 
 def create_torch_dataloader(
@@ -35,9 +31,7 @@ def create_torch_dataloader(
 ) -> tuple[_data_loader.Dataset, int]:
     if data_config.repo_id is None:
         raise ValueError("Data config must have a repo_id")
-    dataset = _data_loader.create_torch_dataset(
-        data_config, action_horizon, model_config
-    )
+    dataset = _data_loader.create_torch_dataset(data_config, action_horizon, model_config)
     dataset = _data_loader.TransformedDataset(
         dataset,
         [
@@ -69,9 +63,7 @@ def create_rlds_dataloader(
     batch_size: int,
     max_frames: int | None = None,
 ) -> tuple[_data_loader.Dataset, int]:
-    dataset = _data_loader.create_rlds_dataset(
-        data_config, action_horizon, batch_size, shuffle=False
-    )
+    dataset = _data_loader.create_rlds_dataset(data_config, action_horizon, batch_size, shuffle=False)
     dataset = _data_loader.IterableTransformedDataset(
         dataset,
         [

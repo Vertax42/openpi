@@ -517,9 +517,9 @@ def train_loop(config: _config.TrainConfig):
                 break
 
             # The unified data loader returns (observation, actions) tuple
-            observation = jax.tree.map(lambda x: x.to(device), observation)  # noqa: PLW2901
-            actions = actions.to(torch.float32)  # noqa: PLW2901
-            actions = actions.to(device)  # noqa: PLW2901
+            observation = jax.tree.map(lambda x: x.to(device), observation)
+            actions = actions.to(torch.float32)
+            actions = actions.to(device)
 
             # Update LR
             for pg in optim.param_groups:

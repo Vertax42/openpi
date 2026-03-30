@@ -65,23 +65,23 @@ class FlexivRizon4RTRealEnv:
         # External cameras (scene cameras)
         cameras: dict | None = None,
     ):
-        config_kwargs = dict(
-            robot_sn=robot_sn,
-            use_gripper=use_gripper,
-            use_force=use_force,
-            go_to_start=go_to_start,
-            log_level=log_level,
-            gripper_type=gripper_type,
-            gripper_mac_addr=gripper_mac_addr,
-            gripper_cam_size=gripper_cam_size,
-            gripper_rectify_size=gripper_rectify_size,
-            gripper_max_pos=gripper_max_pos,
-            stiffness_ratio=stiffness_ratio,
-            zero_ft_sensor_on_connect=zero_ft_sensor_on_connect,
-            inner_control_hz=inner_control_hz,
-            interpolate_cmds=interpolate_cmds,
-            cameras=cameras or {},
-        )
+        config_kwargs = {
+            "robot_sn": robot_sn,
+            "use_gripper": use_gripper,
+            "use_force": use_force,
+            "go_to_start": go_to_start,
+            "log_level": log_level,
+            "gripper_type": gripper_type,
+            "gripper_mac_addr": gripper_mac_addr,
+            "gripper_cam_size": gripper_cam_size,
+            "gripper_rectify_size": gripper_rectify_size,
+            "gripper_max_pos": gripper_max_pos,
+            "stiffness_ratio": stiffness_ratio,
+            "zero_ft_sensor_on_connect": zero_ft_sensor_on_connect,
+            "inner_control_hz": inner_control_hz,
+            "interpolate_cmds": interpolate_cmds,
+            "cameras": cameras or {},
+        }
         if start_position_degree is not None:
             config_kwargs["start_position_degree"] = start_position_degree
 

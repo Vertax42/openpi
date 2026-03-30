@@ -56,9 +56,7 @@ class WebsocketPolicyServer:
             try:
                 start_time = time.monotonic()
                 message = await websocket.recv()
-                logger.info(
-                    f"Received message of size {len(message)} bytes from {websocket.remote_address}"
-                )
+                logger.info(f"Received message of size {len(message)} bytes from {websocket.remote_address}")
                 obs = msgpack_numpy.unpackb(message)
                 logger.info(f"Unpacked observation keys: {list(obs.keys())}")
 
@@ -87,9 +85,7 @@ class WebsocketPolicyServer:
                 break
             except Exception:
                 error_msg = traceback.format_exc()
-                logger.error(
-                    f"Error processing request from {websocket.remote_address}: {error_msg}"
-                )
+                logger.error(f"Error processing request from {websocket.remote_address}: {error_msg}")
                 await websocket.send(error_msg)
                 await websocket.close(
                     code=websockets.frames.CloseCode.INTERNAL_ERROR,
@@ -98,9 +94,7 @@ class WebsocketPolicyServer:
                 raise
 
 
-def _health_check(
-    connection: _server.ServerConnection, request: _server.Request
-) -> _server.Response | None:
+def _health_check(connection: _server.ServerConnection, request: _server.Request) -> _server.Response | None:
     if request.path == "/healthz":
         return connection.respond(http.HTTPStatus.OK, "OK\n")
     # Continue with the normal request handling.

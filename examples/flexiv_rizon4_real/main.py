@@ -22,22 +22,22 @@ Example usage:
         --args.dry_run
 """
 
+from dataclasses import dataclass
 import signal
 import sys
-from dataclasses import dataclass
 from typing import Optional  # noqa: F401
 
-import tyro
-from typing_extensions import override
-
-import examples.flexiv_rizon4_real.env as _env
 from lerobot.utils.robot_utils import get_logger
-from openpi_client import rtc_action_chunk_broker
 from openpi_client import action_chunk_broker
+from openpi_client import rtc_action_chunk_broker
 from openpi_client import websocket_client_policy as _websocket_client_policy
 from openpi_client.runtime import environment as _environment
-from openpi_client.runtime.agents import policy_agent as _policy_agent
 from openpi_client.runtime import runtime as _runtime
+from openpi_client.runtime.agents import policy_agent as _policy_agent
+from typing_extensions import override
+import tyro
+
+import examples.flexiv_rizon4_real.env as _env
 
 logger = get_logger("FlexivRizon4Main")
 
@@ -55,9 +55,7 @@ class DryRunEnvironmentWrapper(_environment.Environment):
         self._episode_count += 1
         self._step_count = 0
         logger.info(f"\n{'='*80}")
-        logger.info(
-            f"🔄 Episode {self._episode_count} - environment reset (dry run mode)"
-        )
+        logger.info(f"🔄 Episode {self._episode_count} - environment reset (dry run mode)")
         logger.info(f"{'='*80}\n")
         self._wrapped_env.reset()
 

@@ -113,12 +113,11 @@ class FlexivRizon4RealEnv:
                 effort = [obs[f"joint_{i}.effort"] for i in range(1, JOINT_DOF + 1)]
                 gripper = [obs["gripper.pos"]]
                 return np.array(pos + vel + effort + gripper, dtype=np.float32)
-            else:
-                # TCP pose (9D) + gripper (1D)
-                position = [obs["tcp.x"], obs["tcp.y"], obs["tcp.z"]]
-                rotation = [obs[f"tcp.r{i + 1}"] for i in range(6)]
-                gripper = [obs["gripper.pos"]]
-                return np.array(position + rotation + gripper, dtype=np.float32)
+            # TCP pose (9D) + gripper (1D)
+            position = [obs["tcp.x"], obs["tcp.y"], obs["tcp.z"]]
+            rotation = [obs[f"tcp.r{i + 1}"] for i in range(6)]
+            gripper = [obs["gripper.pos"]]
+            return np.array(position + rotation + gripper, dtype=np.float32)
 
         raise ValueError(f"Unsupported control_mode: {self.config.control_mode}")
 

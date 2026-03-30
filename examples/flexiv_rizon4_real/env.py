@@ -1,5 +1,7 @@
 """OpenPI Environment wrapper for Flexiv Rizon4 robot."""
 
+from typing import ClassVar
+
 import einops
 from lerobot.utils.robot_utils import get_logger
 import numpy as np
@@ -66,7 +68,7 @@ class FlexivRizon4RealEnvironment(_environment.Environment):
     # Camera name mapping from real environment to policy expected names
     # Policy expects: 'observation/wrist_image_left' (required), 'cam_high', 'cam_right_wrist' (optional)
     # Real env produces: 'wrist_cam', 'left_tactile', 'right_tactile'
-    CAMERA_NAME_MAP = {
+    CAMERA_NAME_MAP: ClassVar[dict] = {
         "wrist_cam": "observation/wrist_image_left",
         # Tactile images not used by current policy, but could be mapped if needed:
         # "left_tactile": "left_tactile",

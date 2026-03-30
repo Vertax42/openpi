@@ -398,7 +398,7 @@ class FsqAttentionTokenizer(nn.Module):
 
     @property
     def vocab_size(self) -> int:
-        return math.prod(FsqCodebook._get_bins_fsq(self.target_codebook_size))  # noqa: SLF001
+        return math.prod(FsqCodebook._get_bins_fsq(self.target_codebook_size))
 
     def setup(self):
         self.proj = nn.Dense(self.embed_dim)

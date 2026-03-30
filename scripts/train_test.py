@@ -14,7 +14,7 @@ from . import train
 @pytest.mark.parametrize("config_name", ["debug"])
 def test_train(tmp_path: pathlib.Path, config_name: str):
     config = dataclasses.replace(
-        _config._CONFIGS_DICT[config_name],  # noqa: SLF001
+        _config._CONFIGS_DICT[config_name],
         batch_size=2,
         checkpoint_base_dir=str(tmp_path / "checkpoint"),
         exp_name="test",

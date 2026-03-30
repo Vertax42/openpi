@@ -1,5 +1,7 @@
 """OpenPI Environment wrapper for Flexiv Rizon4 RT robot."""
 
+from typing import ClassVar
+
 import einops
 from lerobot.utils.robot_utils import get_logger
 import numpy as np
@@ -24,7 +26,7 @@ class FlexivRizon4RTEnvironment(_environment.Environment):
     """
 
     # Camera name mapping from real environment to policy expected names
-    CAMERA_NAME_MAP = {
+    CAMERA_NAME_MAP: ClassVar[dict] = {
         "wrist_cam": "observation/wrist_image_left",
     }
 

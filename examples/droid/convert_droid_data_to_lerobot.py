@@ -197,8 +197,8 @@ class MP4Reader:
 
     def set_reading_parameters(
         self,
-        image=True,  # noqa: FBT002
-        concatenate_images=False,  # noqa: FBT002
+        image=True,
+        concatenate_images=False,
         resolution=(0, 0),
         resize_func=None,
     ):
@@ -238,7 +238,7 @@ class MP4Reader:
             return frame
         return self.resize_func(frame, self.resolution)
 
-    def read_camera(self, ignore_data=False, correct_timestamp=None):  # noqa: FBT002
+    def read_camera(self, ignore_data=False, correct_timestamp=None):
         # Skip if Read Unnecesary #
         if self.skip_reading:
             return {}
@@ -367,7 +367,7 @@ def load_hdf5_to_dict(hdf5_file, index, keys_to_ignore=[]):  # noqa: B006
 
 
 class TrajectoryReader:
-    def __init__(self, filepath, read_images=True):  # noqa: FBT002
+    def __init__(self, filepath, read_images=True):
         self._hdf5_file = h5py.File(filepath, "r")
         is_video_folder = "observations/videos" in self._hdf5_file
         self._read_images = read_images and is_video_folder
@@ -403,10 +403,10 @@ class TrajectoryReader:
 
 def load_trajectory(
     filepath=None,
-    read_cameras=True,  # noqa: FBT002
+    read_cameras=True,
     recording_folderpath=None,
     camera_kwargs={},  # noqa: B006
-    remove_skipped_steps=False,  # noqa: FBT002
+    remove_skipped_steps=False,
     num_samples_per_traj=None,
     num_samples_per_traj_coeff=1.5,
 ):

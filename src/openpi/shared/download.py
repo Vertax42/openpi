@@ -22,11 +22,7 @@ logger = logging.getLogger(__name__)
 
 
 def get_cache_dir() -> pathlib.Path:
-    cache_dir = (
-        pathlib.Path(os.getenv(_OPENPI_DATA_HOME, DEFAULT_CACHE_DIR))
-        .expanduser()
-        .resolve()
-    )
+    cache_dir = pathlib.Path(os.getenv(_OPENPI_DATA_HOME, DEFAULT_CACHE_DIR)).expanduser().resolve()
     cache_dir.mkdir(parents=True, exist_ok=True)
     _set_folder_permission(cache_dir)
     return cache_dir
@@ -107,24 +103,15 @@ def _download_fsspec(url: str, local_path: pathlib.Path, **kwargs) -> None:
     fs, _ = fsspec.core.url_to_fs(url, **kwargs)
     info = fs.info(url)
     # Folders are represented by 0-byte objects with a trailing forward slash.
-    if is_dir := (
-        info["type"] == "directory"
-        or (info["size"] == 0 and info["name"].endswith("/"))
-    ):
+    if is_dir := (info["type"] == "directory" or (info["size"] == 0 and info["name"].endswith("/"))):
         total_size = fs.du(url)
     else:
         total_size = info["size"]
-    with tqdm.tqdm(
-        total=total_size, unit="iB", unit_scale=True, unit_divisor=1024
-    ) as pbar:
+    with tqdm.tqdm(total=total_size, unit="iB", unit_scale=True, unit_divisor=1024) as pbar:
         executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
         future = executor.submit(fs.get, url, local_path, recursive=is_dir)
         while not future.done():
-            current_size = sum(
-                f.stat().st_size
-                for f in [*local_path.rglob("*"), local_path]
-                if f.is_file()
-            )
+            current_size = sum(f.stat().st_size for f in [*local_path.rglob("*"), local_path] if f.is_file())
             pbar.update(current_size - pbar.n)
             time.sleep(1)
         pbar.update(total_size - pbar.n)
@@ -159,18 +146,9 @@ def _ensure_permissions(path: pathlib.Path) -> None:
 
     def _set_file_permission(file_path: pathlib.Path) -> None:
         """Set all files to be read & writable, if it is a script, keep it as a script."""
-        file_rw = (
-            stat.S_IRUSR
-            | stat.S_IWUSR
-            | stat.S_IRGRP
-            | stat.S_IWGRP
-            | stat.S_IROTH
-            | stat.S_IWOTH
-        )
+        file_rw = stat.S_IRUSR | stat.S_IWUSR | stat.S_IRGRP | stat.S_IWGRP | stat.S_IROTH | stat.S_IWOTH
         if file_path.stat().st_mode & 0o100:
-            _set_permission(
-                file_path, file_rw | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH
-            )
+            _set_permission(file_path, file_rw | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
         else:
             _set_permission(file_path, file_rw)
 
@@ -196,9 +174,7 @@ def _get_mtime(year: int, month: int, day: int) -> float:
 # Partial matching will be used from top to bottom and the first match will be chosen.
 # Cached entries will be retained only if they are newer than the expiration timestamp.
 _INVALIDATE_CACHE_DIRS: dict[re.Pattern, float] = {
-    re.compile("openpi-assets/checkpoints/pi0_aloha_pen_uncap"): _get_mtime(
-        2025, 2, 17
-    ),
+    re.compile("openpi-assets/checkpoints/pi0_aloha_pen_uncap"): _get_mtime(2025, 2, 17),
     re.compile("openpi-assets/checkpoints/pi0_libero"): _get_mtime(2025, 2, 6),
     re.compile("openpi-assets/checkpoints/"): _get_mtime(2025, 2, 3),
 }

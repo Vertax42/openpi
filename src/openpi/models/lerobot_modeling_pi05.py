@@ -15,18 +15,18 @@
 # limitations under the License.
 
 import builtins
+from collections import deque
 import logging
 import math
-from collections import deque
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal, TypedDict
 
-import torch
-import torch.nn.functional as F  # noqa: N812
-from torch import Tensor, nn
-from typing_extensions import Unpack
-
 from lerobot.utils.import_utils import _transformers_available
+import torch
+from torch import Tensor
+from torch import nn
+import torch.nn.functional as F  # noqa: N812
+from typing_extensions import Unpack
 
 # Conditional import for type checking and lazy loading
 if TYPE_CHECKING or _transformers_available:
@@ -42,14 +42,13 @@ else:
 
 from lerobot.configs.policies import PreTrainedConfig
 from lerobot.policies.pi05.configuration_pi05 import PI05Config
-from lerobot.policies.pretrained import PreTrainedPolicy, T
+from lerobot.policies.pretrained import PreTrainedPolicy
+from lerobot.policies.pretrained import T
 from lerobot.policies.rtc.modeling_rtc import RTCProcessor
-from lerobot.utils.constants import (
-    ACTION,
-    OBS_LANGUAGE_ATTENTION_MASK,
-    OBS_LANGUAGE_TOKENS,
-    OPENPI_ATTENTION_MASK_VALUE,
-)
+from lerobot.utils.constants import ACTION
+from lerobot.utils.constants import OBS_LANGUAGE_ATTENTION_MASK
+from lerobot.utils.constants import OBS_LANGUAGE_TOKENS
+from lerobot.utils.constants import OPENPI_ATTENTION_MASK_VALUE
 
 
 class ActionSelectKwargs(TypedDict, total=False):
@@ -226,7 +225,7 @@ def compute_layer_complete(
     gates = []
     for i, hidden_states in enumerate(inputs_embeds):
         layer = models[i].layers[layer_idx]
-        hidden_states, gate = layer.input_layernorm(hidden_states, cond=adarms_cond[i])  # noqa: PLW2901
+        hidden_states, gate = layer.input_layernorm(hidden_states, cond=adarms_cond[i])
         gates.append(gate)
         input_shape = hidden_states.shape[:-1]
         hidden_shape = (*input_shape, -1, layer.self_attn.head_dim)
@@ -248,9 +247,7 @@ def compute_layer_complete(
         dtype=query_states.dtype,
     )
     cos, sin = paligemma.model.language_model.rotary_emb(dummy_tensor, position_ids)
-    query_states, key_states = modeling_gemma.apply_rotary_pos_emb(
-        query_states, key_states, cos, sin, unsqueeze_dim=1
-    )
+    query_states, key_states = modeling_gemma.apply_rotary_pos_emb(query_states, key_states, cos, sin, unsqueeze_dim=1)
     batch_size = query_states.shape[0]
     scaling = paligemma.language_model.layers[layer_idx].self_attn.scaling
     # Attention computation
@@ -275,7 +272,7 @@ def compute_layer_complete(
             att_output = att_output.to(layer.self_attn.o_proj.weight.dtype)
         out_emb = layer.self_attn.o_proj(att_output[:, start_pos:end_pos])
         # first residual
-        out_emb = modeling_gemma._gated_residual(hidden_states, out_emb, gates[i])  # noqa: SLF001
+        out_emb = modeling_gemma._gated_residual(hidden_states, out_emb, gates[i])
         after_first_residual = out_emb.clone()
         out_emb, gate = layer.post_attention_layernorm(out_emb, cond=adarms_cond[i])
         # Convert to bfloat16 if the next layer (mlp) uses bfloat16
@@ -283,7 +280,7 @@ def compute_layer_complete(
             out_emb = out_emb.to(dtype=torch.bfloat16)
         out_emb = layer.mlp(out_emb)
         # second residual
-        out_emb = modeling_gemma._gated_residual(after_first_residual, out_emb, gate)  # noqa: SLF001
+        out_emb = modeling_gemma._gated_residual(after_first_residual, out_emb, gate)
         outputs_embeds.append(out_emb)
         start_pos = end_pos
     return outputs_embeds
@@ -312,7 +309,7 @@ def get_gemma_config(variant: str) -> GemmaConfig:  # see openpi `gemma.py: get_
             num_kv_heads=1,
             head_dim=256,
         )
-    elif variant == "gemma_2b":
+    if variant == "gemma_2b":
         return GemmaConfig(
             width=2048,
             depth=18,
@@ -321,8 +318,7 @@ def get_gemma_config(variant: str) -> GemmaConfig:  # see openpi `gemma.py: get_
             num_kv_heads=1,
             head_dim=256,
         )
-    else:
-        raise ValueError(f"Unknown variant: {variant}")
+    raise ValueError(f"Unknown variant: {variant}")
 
 
 class PaliGemmaWithExpertModel(
@@ -342,7 +338,7 @@ class PaliGemmaWithExpertModel(
         super().__init__()
 
         vlm_config_hf = CONFIG_MAPPING["paligemma"]()
-        vlm_config_hf._vocab_size = 257152  # noqa: SLF001
+        vlm_config_hf._vocab_size = 257152
         vlm_config_hf.image_token_index = 257152
         vlm_config_hf.text_config.hidden_size = vlm_config.width
         vlm_config_hf.text_config.intermediate_size = vlm_config.mlp_dim
@@ -597,9 +593,7 @@ class PI05Pytorch(nn.Module):  # see openpi `PI0Pytorch`
         time = time_beta * self.config.time_sampling_scale + self.config.time_sampling_offset
         return time.to(dtype=torch.float32, device=device)
 
-    def embed_prefix(
-        self, images, img_masks, tokens, masks
-    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    def embed_prefix(self, images, img_masks, tokens, masks) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """Embed images with SigLIP and language tokens with embedding layer."""
         embs = []
         pad_masks = []
@@ -774,7 +768,7 @@ class PI05Pytorch(nn.Module):  # see openpi `PI0Pytorch`
         prefix_position_ids = torch.cumsum(prefix_pad_masks, dim=1) - 1
 
         prefix_att_2d_masks_4d = self._prepare_attention_masks_4d(prefix_att_2d_masks)
-        self.paligemma_with_expert.paligemma.language_model.config._attn_implementation = "eager"  # noqa: SLF001
+        self.paligemma_with_expert.paligemma.language_model.config._attn_implementation = "eager"
 
         _, past_key_values = self.paligemma_with_expert.forward(
             attention_mask=prefix_att_2d_masks_4d,
@@ -859,7 +853,7 @@ class PI05Pytorch(nn.Module):  # see openpi `PI0Pytorch`
         position_ids = prefix_offsets + torch.cumsum(suffix_pad_masks, dim=1) - 1
 
         full_att_2d_masks_4d = self._prepare_attention_masks_4d(full_att_2d_masks)
-        self.paligemma_with_expert.gemma_expert.model.config._attn_implementation = "eager"  # noqa: SLF001
+        self.paligemma_with_expert.gemma_expert.model.config._attn_implementation = "eager"
 
         outputs_embeds, _ = self.paligemma_with_expert.forward(
             attention_mask=full_att_2d_masks_4d,
@@ -1046,18 +1040,14 @@ class PI05Policy(PreTrainedPolicy):
                 key,
             ):
                 # Check if the model actually has adaRMS enabled for the expert
-                expert_uses_adarms = getattr(
-                    self.model.paligemma_with_expert.gemma_expert.config, "use_adarms", False
-                )
+                expert_uses_adarms = getattr(self.model.paligemma_with_expert.gemma_expert.config, "use_adarms", False)
                 if expert_uses_adarms:
                     logging.warning(f"Skipping layer norm key (adaRMS mismatch): {key}")
                     continue
 
             if re.match(r"paligemma_with_expert\.gemma_expert\.model\.norm\.weight", key):
                 # Check if the model actually has adaRMS enabled for the expert
-                expert_uses_adarms = getattr(
-                    self.model.paligemma_with_expert.gemma_expert.config, "use_adarms", False
-                )
+                expert_uses_adarms = getattr(self.model.paligemma_with_expert.gemma_expert.config, "use_adarms", False)
                 if expert_uses_adarms:
                     logging.warning(f"Skipping norm key (adaRMS mismatch): {key}")
                     continue
@@ -1100,9 +1090,11 @@ class PI05Policy(PreTrainedPolicy):
         # If RTC is not enabled - we can still track the denoising data
         if self.config.rtc_config is not None:
             self.rtc_processor = RTCProcessor(self.config.rtc_config)
-            logging.info(f"RTC Processor initialized: enabled={self.config.rtc_config.enabled}, "
-                        f"max_guidance_weight={self.config.rtc_config.max_guidance_weight}, "
-                        f"execution_horizon={self.config.rtc_config.execution_horizon}")
+            logging.info(
+                f"RTC Processor initialized: enabled={self.config.rtc_config.enabled}, "
+                f"max_guidance_weight={self.config.rtc_config.max_guidance_weight}, "
+                f"execution_horizon={self.config.rtc_config.execution_horizon}"
+            )
         else:
             logging.info("RTC is disabled (rtc_config is None)")
 
@@ -1187,9 +1179,7 @@ class PI05Policy(PreTrainedPolicy):
     @torch.no_grad()
     def select_action(self, batch: dict[str, Tensor]) -> Tensor:
         """Select a single action given environment observations."""
-        assert not self._rtc_enabled(), (
-            "RTC is not supported for select_action, use it with predict_action_chunk"
-        )
+        assert not self._rtc_enabled(), "RTC is not supported for select_action, use it with predict_action_chunk"
 
         self.eval()
 

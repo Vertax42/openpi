@@ -26,15 +26,10 @@ Example usage:
         --task "pack 6 cosmetic bottles into the carton"
 """
 
+from dataclasses import dataclass
 import signal
 import sys
-from dataclasses import dataclass, field
 
-import tyro
-from typing_extensions import override
-
-import examples.bi_flexiv_rizon4_rt.env as _env
-import examples.bi_flexiv_rizon4_rt.recorder as _recorder
 from lerobot.utils.robot_utils import get_logger
 from openpi_client import action_chunk_broker
 from openpi_client import rtc_action_chunk_broker
@@ -42,18 +37,36 @@ from openpi_client import websocket_client_policy as _websocket_client_policy
 from openpi_client.runtime import environment as _environment
 from openpi_client.runtime import runtime as _runtime
 from openpi_client.runtime.agents import policy_agent as _policy_agent
+from typing_extensions import override
+import tyro
+
+import examples.bi_flexiv_rizon4_rt.env as _env
+import examples.bi_flexiv_rizon4_rt.recorder as _recorder
 
 logger = get_logger("BiFlexivRizon4RTMain")
 
 # Action dimension labels for dry-run logging
 _ACTION_LABELS = [
-    "left_tcp.x", "left_tcp.y", "left_tcp.z",
-    "left_tcp.r1", "left_tcp.r2", "left_tcp.r3",
-    "left_tcp.r4", "left_tcp.r5", "left_tcp.r6",
-    "right_tcp.x", "right_tcp.y", "right_tcp.z",
-    "right_tcp.r1", "right_tcp.r2", "right_tcp.r3",
-    "right_tcp.r4", "right_tcp.r5", "right_tcp.r6",
-    "left_gripper.pos", "right_gripper.pos",
+    "left_tcp.x",
+    "left_tcp.y",
+    "left_tcp.z",
+    "left_tcp.r1",
+    "left_tcp.r2",
+    "left_tcp.r3",
+    "left_tcp.r4",
+    "left_tcp.r5",
+    "left_tcp.r6",
+    "right_tcp.x",
+    "right_tcp.y",
+    "right_tcp.z",
+    "right_tcp.r1",
+    "right_tcp.r2",
+    "right_tcp.r3",
+    "right_tcp.r4",
+    "right_tcp.r5",
+    "right_tcp.r6",
+    "left_gripper.pos",
+    "right_gripper.pos",
 ]
 
 
@@ -139,7 +152,7 @@ class Args:
     blend_steps: int = 3
     default_delay: int = 2
 
-    # Recording (LeRobot format, raw 640×480 images + absolute actions)
+    # Recording (LeRobot format, raw 640x480 images + absolute actions)
     record: bool = False
     record_repo_id: str = "Xense/recorded_dataset"
     record_root: str | None = None  # local save path, defaults to ~/.cache/huggingface/lerobot
@@ -175,7 +188,9 @@ def main(args: Args) -> None:
     subscribers = []
     if args.record:
         if args.dry_run:
-            logger.warning("Recording is enabled in dry-run mode — state/action data will be from policy output only (no real robot motion)")
+            logger.warning(
+                "Recording is enabled in dry-run mode — state/action data will be from policy output only (no real robot motion)"
+            )
         recorder = _recorder.make_recorder_subscriber(
             repo_id=args.record_repo_id,
             task=args.task,
@@ -231,6 +246,7 @@ def main(args: Args) -> None:
     except Exception as e:
         logger.error(f"Runtime error: {e}")
         import traceback
+
         traceback.print_exc()
         raise
     finally:

@@ -125,6 +125,17 @@ ignore = [
     "PD008",  # Lots of false positives.
     "ISC001", # Disabling to support ruff format.
     "LOG015", # Use logger.info.
+    "FBT001", # Boolean-typed positional arguments are common in this codebase.
+    "FBT002", # Boolean default positional arguments are common in this codebase.
+    "SLF001", # Private member access is used intentionally in env wrappers.
+    "B905",   # zip() strict= not required here; already in unfixable.
+    "RET504", # Unnecessary assignment before return — readability preference.
+    "PLW2901", # for loop variable overwritten — intentional pattern in model code.
+    "PERF203", # try/except in loop — intentional in websocket server.
+    "B023",   # loop variable binding in lambda — acceptable in internal utilities.
+    "SIM108", # ternary operator suggestion — if/else blocks preferred for readability.
+    "UP038",  # X | Y isinstance syntax — keeping tuple form for clarity.
+    "F841",   # unused local variable — occasional intentional pattern.
 ]
 unfixable = [
     "B905", # Fix defaults to strict=False, which is not what we want.

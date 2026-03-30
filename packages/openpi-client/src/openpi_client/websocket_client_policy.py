@@ -37,11 +37,7 @@ class WebsocketClientPolicy(_base_policy.BasePolicy):
         logger.info(f"Waiting for server at {self._uri}...")
         while True:
             try:
-                headers = (
-                    {"Authorization": f"Api-Key {self._api_key}"}
-                    if self._api_key
-                    else None
-                )
+                headers = {"Authorization": f"Api-Key {self._api_key}"} if self._api_key else None
                 conn = websockets.sync.client.connect(
                     self._uri,
                     compression=None,
