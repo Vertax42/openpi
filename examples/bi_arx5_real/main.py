@@ -10,6 +10,7 @@ from openpi_client.runtime import environment as _environment
 from typing_extensions import override
 
 import examples.bi_arx5_real.env as _env
+import examples.bi_arx5_real.recorder as _recorder
 from lerobot.utils.robot_utils import get_logger
 
 logger = get_logger("BiARX5Main")
@@ -146,6 +147,12 @@ class Args:
     # Default inference_delay for warmup and fallback (in steps)
     default_delay: int = 2
 
+    # Recording (LeRobot format, raw HWC images + absolute actions)
+    record: bool = False
+    record_repo_id: str = "Xense/recorded_arx5_dataset"
+    record_root: str | None = None  # local save path, defaults to ~/.cache/huggingface/lerobot
+    task: str = "pick and place"
+
 
 def main(args: Args) -> None:
     ws_client_policy = _websocket_client_policy.WebsocketClientPolicy(
@@ -182,6 +189,17 @@ def main(args: Args) -> None:
         logger.info("✅ normal mode: action will be executed to robot")
         environment = base_environment
 
+    subscribers = []
+    if args.record:
+        recorder = _recorder.make_recorder_subscriber(
+            repo_id=args.record_repo_id,
+            task=args.task,
+            fps=int(args.runtime_hz),
+            root=args.record_root,
+        )
+        subscribers.append(recorder)
+        logger.info(f"Recording enabled: repo_id={args.record_repo_id}, task='{args.task}'")
+
     if args.rtc_enabled:
         runtime = _runtime.Runtime(
             environment=environment,
@@ -196,7 +214,7 @@ def main(args: Args) -> None:
                     default_delay=args.default_delay,
                 )
             ),
-            subscribers=[],
+            subscribers=subscribers,
             max_hz=args.runtime_hz,  # runtime frequency, unit: Hz
             num_episodes=args.num_episodes,
             max_episode_steps=args.max_episode_steps,
@@ -210,7 +228,7 @@ def main(args: Args) -> None:
                     action_horizon=args.action_horizon,
                 )
             ),
-            subscribers=[],
+            subscribers=subscribers,
             max_hz=args.runtime_hz,  # runtime frequency, unit: Hz
             num_episodes=args.num_episodes,
             max_episode_steps=args.max_episode_steps,

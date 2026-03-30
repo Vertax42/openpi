@@ -99,6 +99,12 @@ class BiARX5RealEnvironment(_environment.Environment):
         return {
             "state": obs["qpos"],
             "images": processed_images,  # use newly created dict
+            # Raw images (original resolution HWC) for recording, depth/tactile excluded.
+            "images_raw": {
+                cam: img
+                for cam, img in obs["images"].items()
+                if "_depth" not in cam and "tactile" not in cam
+            },
             # prompt is injected by policy server's InjectDefaultPrompt, no need to add here
         }
 
