@@ -498,6 +498,7 @@ python scripts/compute_norm_stats.py --config-name pi05_base_xense_flare_pick_an
 XLA_PYTHON_CLIENT_MEM_FRACTION=0.9 python scripts/train.py pi05_base_xense_flare_pick_and_place_cube \
     --exp-name=xense_flare_pick_and_place_cube_20260115 --overwrite
 ```
+
 ### BiFlexiv Platform
 
 ```bash
@@ -593,6 +594,15 @@ python -m examples.bi_arx5_real.main \
     --args.port 8000 \
     --args.dry_run \
     --args.enable_tactile_sensors
+```
+
+```bash
+# Run BiFlexiv client
+python -m examples.bi_flexiv_rizon4_rt.main \
+    --args.host 192.168.110.68 \
+    --args.port 8000 \
+    --args.bi_mount_type side \
+    --args.dry_run
 ```
 
 ---

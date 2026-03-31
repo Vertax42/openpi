@@ -135,9 +135,9 @@ class Args:
     render_width: int = 224
 
     # Runtime settings
-    runtime_hz: float = 20.0
+    runtime_hz: float = 30.0
     num_episodes: int = 1
-    max_episode_steps: int = 100000
+    max_episode_steps: int = 1000000
 
     # Dry run mode
     dry_run: bool = False
