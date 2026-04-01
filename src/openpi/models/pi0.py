@@ -491,4 +491,7 @@ class Pi0(_model.BaseModel):
             return time >= -dt / 2
 
         x_0, _ = jax.lax.while_loop(cond, step, (noise, 1.0))
+        # Re-freeze prefix in final output: the last denoising step adds dt*v_t
+        # to the prefix region, so we must restore the clean action_prefix.
+        x_0 = jnp.where(action_prefix_mask[:, :, None], action_prefix, x_0)
         return x_0
