@@ -599,7 +599,7 @@ python -m examples.bi_arx5_real.main \
 ```bash
 # Run BiFlexiv client
 python -m examples.bi_flexiv_rizon4_rt.main \
-    --args.host 192.168.110.68 \
+    --args.host 192.168.110.70 \
     --args.port 8000 \
     --args.bi_mount_type side \
     --args.dry_run

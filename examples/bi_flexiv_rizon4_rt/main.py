@@ -122,13 +122,13 @@ class Args:
     port: int = 8000
 
     # Robot configuration
-    bi_mount_type: str = "forward"  # "forward" or "side"
+    bi_mount_type: str = "side"  # "forward" or "side"
     use_force: bool = False
     go_to_start: bool = True
     stiffness_ratio: float = 0.2
-    control_frequency: float = 100.0
+    control_frequency: float = 200.0
     enable_tactile_sensors: bool = False
-    log_level: str = "INFO"
+    log_level: str = "DEBUG"
 
     # Image rendering
     render_height: int = 224
