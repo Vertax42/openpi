@@ -8,6 +8,36 @@ Dual-arm Flexiv Rizon4 inference client using the OpenPI policy server.
 - Flexiv Rizon4 RT arms reachable over Ethernet
 - OpenPI policy server running (see below)
 
+## Network Setup
+
+Robot FastDDS communication and policy server inference must run on **separate physical links** to avoid network contention (FastDDS 1 kHz commands are latency-sensitive and will stall if competing with large inference payloads).
+
+| Interface | IP | Connects to |
+|---|---|---|
+| enp8s0 (motherboard Ethernet) | 192.168.142.216 (DHCP) | Router → Robot arms (FastDDS) |
+| enx6c1ff7618da5 (USB-C adapter) | **10.142.1.2**/24 (static) | Direct cable → Policy server |
+
+**Policy server** (GPU machine) sets its corresponding port to **10.142.1.1**/24.
+
+### Configure static IPs (one-time per boot)
+
+On this machine (robot client):
+```bash
+sudo ip addr add 10.142.1.2/24 dev enx6c1ff7618da5
+```
+
+On the policy server:
+```bash
+sudo ip addr add 10.142.1.1/24 dev <interface_name>
+```
+
+Verify connectivity:
+```bash
+ping 10.142.1.1
+```
+
+Then use `--host 10.142.1.1` when launching the robot client.
+
 ## Usage
 
 ### Terminal 1: Start OpenPI Policy Server
@@ -24,7 +54,7 @@ uv run scripts/serve_policy.py policy:checkpoint \
 ```bash
 cd ~/openpi
 mamba run -n lerobot-xense python -m examples.bi_flexiv_rizon4_rt.main \
-    --host 192.168.2.100 \
+    --host 10.142.1.1 \
     --port 8000
 ```
 
@@ -47,7 +77,7 @@ mamba run -n lerobot-xense python -m examples.bi_flexiv_rizon4_rt.main \
 
 ```bash
 mamba run -n lerobot-xense python -m examples.bi_flexiv_rizon4_rt.main \
-    --host 192.168.2.100 --port 8000 \
+    --host 10.142.1.1 --port 8000 \
     --rtc_enabled \
     --action_queue_size_to_get_new_actions 40 \
     --execution_horizon 50 \
@@ -58,7 +88,7 @@ mamba run -n lerobot-xense python -m examples.bi_flexiv_rizon4_rt.main \
 
 ```bash
 mamba run -n lerobot-xense python -m examples.bi_flexiv_rizon4_rt.main \
-    --host 192.168.2.100 --port 8000 \
+    --host 10.142.1.1 --port 8000 \
     --dry_run
 ```
 
@@ -71,7 +101,7 @@ absolute actions — same format as the training data).
 
 ```bash
 mamba run -n lerobot-xense python -m examples.bi_flexiv_rizon4_rt.main \
-    --host 192.168.2.100 --port 8000 \
+    --host 10.142.1.1 --port 8000 \
     --record \
     --record_repo_id Xense/my_new_dataset \
     --task "pack 6 cosmetic bottles into the carton"

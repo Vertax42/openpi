@@ -9,7 +9,7 @@ from typing_extensions import override
 from openpi_client import base_policy as _base_policy
 from openpi_client.action_queue import ActionQueue
 from openpi_client.latency_tracker import LatencyTracker
-from openpi_client.logger import get_logger
+from lerobot.utils.robot_utils import get_logger
 
 logger = get_logger("RTCActionChunkBroker")
 
@@ -28,6 +28,7 @@ class RTCActionChunkBroker(_base_policy.BasePolicy):
         frequency_hz: The control frequency in Hz.
         action_queue_size_to_get_new_actions: Threshold to request new actions.
         rtc_enabled: Whether to enable RTC mode (replace queue) or append mode.
+        dry_run: If True, each infer() includes ``rtc_metrics`` (delay, round-trip ms, etc.).
     """
 
     def __init__(
@@ -39,6 +40,7 @@ class RTCActionChunkBroker(_base_policy.BasePolicy):
         execution_horizon: int = 20,
         blend_steps: int = 0,
         default_delay: int = 4,  # Default inference_delay for warmup and fallback
+        dry_run: bool = False,
     ):
         self._policy = policy
         self._frequency_hz = frequency_hz
@@ -49,6 +51,10 @@ class RTCActionChunkBroker(_base_policy.BasePolicy):
 
         self._action_queue = ActionQueue(rtc_enabled=rtc_enabled, blend_steps=blend_steps)
         self._latency_tracker = LatencyTracker()
+        self._dry_run = dry_run
+        self._metrics_lock = threading.Lock()
+        self._last_inference_metrics: Optional[Dict] = None
+        self._inference_seq = 0
         self._latest_obs: Optional[Dict] = None
         self._latest_obs_lock = threading.Lock()
 
@@ -121,7 +127,10 @@ class RTCActionChunkBroker(_base_policy.BasePolicy):
                             estimated_delay_steps = self._default_delay
 
                         # Get leftover actions for RTC guidance
-                        prev_chunk_left_over = self._action_queue.get_left_over()
+                        # Use fixed_length to prevent JAX recompilation on shape changes
+                        prev_chunk_left_over = self._action_queue.get_left_over(
+                            fixed_length=self._action_queue_size_to_get_new_actions
+                        )
                         logger.info(
                             f"RTC: Starting inference. Queue size: {self._action_queue.qsize()}, "
                             f"estimated_delay={estimated_delay_steps}, "
@@ -213,6 +222,23 @@ class RTCActionChunkBroker(_base_policy.BasePolicy):
                                 f"(likely JIT), using default delay=4 for next inference"
                             )
 
+                    if self._dry_run:
+                        self._inference_seq += 1
+                        p95 = self._latency_tracker.p95()
+                        with self._metrics_lock:
+                            self._last_inference_metrics = {
+                                "inference_seq": self._inference_seq,
+                                # Full client→server→inference→response time for this chunk request
+                                "infer_round_trip_ms": latency * 1000.0,
+                                "inference_delay_steps": inference_delay_steps,
+                                "estimated_delay_steps": estimated_delay_steps,
+                                "real_delay_steps": int(real_delay_before_merge),
+                                "merge_ms": merge_ms,
+                                "queue_size_after_merge": self._action_queue.qsize(),
+                                "latency_p95_ms": (p95 or 0.0) * 1000.0,
+                                "delay_for_next_infer_steps": self._last_real_delay,
+                            }
+
                     # Signal that first inference is done (queue now has actions)
                     if not self._first_inference_done.is_set():
                         logger.info("First inference completed, action queue initialized")
@@ -261,9 +287,13 @@ class RTCActionChunkBroker(_base_policy.BasePolicy):
                 raise RuntimeError("RTCActionChunkBroker: Action queue is empty.")
 
         # Return in the format expected by the agent (dict)
-        # The agent expects a dict that might contain other keys, but usually just "actions"
-        # Since we only queue the action array, we reconstruct the dict.
-        return {"actions": action}
+        out: Dict = {"actions": action}
+        if self._dry_run:
+            with self._metrics_lock:
+                snap = dict(self._last_inference_metrics) if self._last_inference_metrics else None
+            if snap is not None:
+                out["rtc_metrics"] = snap
+        return out
 
     @override
     def reset(self) -> None:
@@ -272,6 +302,9 @@ class RTCActionChunkBroker(_base_policy.BasePolicy):
         self._action_queue.clear()
         self._first_inference_done.clear()  # Reset for next episode
         self._last_real_delay = None  # Reset delay tracking
+        with self._metrics_lock:
+            self._last_inference_metrics = None
+        self._inference_seq = 0
         # Reset warmup state for next episode
         self._warmup_done = False
         self._warmup_prev_chunk = None

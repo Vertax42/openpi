@@ -3,7 +3,7 @@ from typing import Optional
 
 import numpy as np
 
-from openpi_client.logger import get_logger
+from lerobot.utils.robot_utils import get_logger
 
 logger = get_logger("ActionQueue")
 
@@ -97,20 +97,40 @@ class ActionQueue:
             self.original_queue = None
             self.last_index = 0
 
-    def get_left_over(self) -> Optional[np.ndarray]:
+    def get_left_over(self, fixed_length: int = 0) -> Optional[np.ndarray]:
         """Get leftover original actions for RTC prev_chunk_left_over.
 
         These are the unconsumed actions from the current chunk, which will be
         used by RTC to compute corrections for the next chunk.
 
+        Args:
+            fixed_length: If > 0, pad or truncate to this exact length so the
+                         returned shape is always (fixed_length, action_dim).
+                         This prevents JAX JIT recompilation when the leftover
+                         count fluctuates by 1-2 steps between inferences.
+                         Padding repeats the last action; truncation keeps the
+                         most recent (tail) actions.
+
         Returns:
-            np.ndarray | None: Remaining original actions (remaining_steps, action_dim),
-                              or None if no original queue exists.
+            np.ndarray | None: Remaining original actions, or None if no
+                              original queue exists.
         """
         with self.lock:
             if self.original_queue is None:
                 return None
-            return self.original_queue[self.last_index :]
+            left_over = self.original_queue[self.last_index:]
+
+            if fixed_length <= 0 or len(left_over) == 0:
+                return left_over
+
+            if len(left_over) >= fixed_length:
+                # Truncate: keep the last fixed_length actions
+                return left_over[-fixed_length:]
+            else:
+                # Pad: repeat the last action to fill
+                pad_count = fixed_length - len(left_over)
+                padding = np.repeat(left_over[-1:], pad_count, axis=0)
+                return np.concatenate([left_over, padding], axis=0)
 
     def merge(
         self,

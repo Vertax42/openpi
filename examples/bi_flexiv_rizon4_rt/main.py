@@ -77,11 +77,13 @@ class DryRunEnvironmentWrapper(_environment.Environment):
         self._wrapped_env = wrapped_env
         self._step_count = 0
         self._episode_count = 0
+        self._last_rtc_inference_seq = -1
 
     @override
     def reset(self) -> None:
         self._episode_count += 1
         self._step_count = 0
+        self._last_rtc_inference_seq = -1
         logger.info(f"\n{'='*80}")
         logger.info(f"Episode {self._episode_count} - reset (dry run)")
         logger.info(f"{'='*80}\n")
@@ -106,6 +108,24 @@ class DryRunEnvironmentWrapper(_environment.Environment):
             for i, (label, value) in enumerate(zip(_ACTION_LABELS, actions)):
                 logger.info(f"  [{i:2d}] {label:18s}: {value:+.6f}")
             logger.info(f"{'─'*80}")
+            rtc = action.get("rtc_metrics")
+            if rtc is not None:
+                seq = int(rtc.get("inference_seq", 0))
+                if seq != self._last_rtc_inference_seq:
+                    self._last_rtc_inference_seq = seq
+                    next_d = rtc["delay_for_next_infer_steps"]
+                    logger.info(
+                        f"RTC [dry run] new chunk #{seq}: "
+                        f"infer+server RTT={rtc['infer_round_trip_ms']:.1f} ms "
+                        f"(model + WebSocket round-trip); "
+                        f"delay est={rtc['estimated_delay_steps']} steps, "
+                        f"real={rtc['real_delay_steps']} steps, "
+                        f"time-based={rtc['inference_delay_steps']} steps; "
+                        f"delay_for_next_infer={next_d}; "
+                        f"merge={rtc['merge_ms']:.2f} ms; "
+                        f"queue_after={rtc['queue_size_after_merge']}; "
+                        f"infer RTT p95={rtc['latency_p95_ms']:.1f} ms"
+                    )
             logger.info("DRY RUN: action NOT sent to robot")
             logger.info(f"{'─'*80}\n")
 
@@ -126,7 +146,7 @@ class Args:
     use_force: bool = False
     go_to_start: bool = True
     stiffness_ratio: float = 0.2
-    control_frequency: float = 200.0
+    control_frequency: float = 100.0
     enable_tactile_sensors: bool = False
     log_level: str = "DEBUG"
 
@@ -147,7 +167,7 @@ class Args:
 
     # RTC config
     rtc_enabled: bool = False
-    action_queue_size_to_get_new_actions: int = 40
+    action_queue_size_to_get_new_actions: int = 30
     execution_horizon: int = 50
     blend_steps: int = 3
     default_delay: int = 2
@@ -209,6 +229,7 @@ def main(args: Args) -> None:
             execution_horizon=args.execution_horizon,
             blend_steps=args.blend_steps,
             default_delay=args.default_delay,
+            dry_run=args.dry_run,
         )
     else:
         policy = action_chunk_broker.ActionChunkBroker(
