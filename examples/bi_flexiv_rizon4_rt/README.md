@@ -66,7 +66,8 @@ mamba run -n lerobot-xense python -m examples.bi_flexiv_rizon4_rt.main \
 | `--port` | `8000` | Policy server port |
 | `--bi_mount_type` | `forward` | Robot mount: `forward` or `side` |
 | `--stiffness_ratio` | `0.2` | Cartesian stiffness (0–1) |
-| `--control_frequency` | `100.0` | Inner control loop Hz |
+| `--inner_control_hz` | `1000` | How often each 1 kHz RT loop consumes a new Python command |
+| `--interpolate_cmds` | `True` | Enable linear interpolation between consumed commands |
 | `--runtime_hz` | `20.0` | Policy inference Hz |
 | `--action_horizon` | `50` | Steps per action chunk |
 | `--num_episodes` | `1` | Episodes to run |

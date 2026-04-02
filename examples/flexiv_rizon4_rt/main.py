@@ -133,10 +133,10 @@ class Args:
     # inner_control_hz: how often the C++ RT callback (1 kHz) consumes a new
     #   Python command. Range [1, 1000]. Default=1000 (every 1 ms cycle).
     #   e.g. 500 → consume every 2 ms; 100 → every 10 ms.
-    inner_control_hz: int = 100
-    # interpolate_cmds: smooth motion between Python commands via MinJerk.
+    inner_control_hz: int = 1000
+    # interpolate_cmds: smooth motion between sparse Python commands via linear interpolation.
     #   Only effective when inner_control_hz < 1000.
-    interpolate_cmds: bool = False
+    interpolate_cmds: bool = True
 
     # Image rendering
     render_height: int = 224

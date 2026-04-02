@@ -146,7 +146,8 @@ class Args:
     use_force: bool = False
     go_to_start: bool = True
     stiffness_ratio: float = 0.2
-    control_frequency: float = 100.0
+    inner_control_hz: int = 1000
+    interpolate_cmds: bool = True
     enable_tactile_sensors: bool = False
     log_level: str = "DEBUG"
 
@@ -191,7 +192,8 @@ def main(args: Args) -> None:
         use_force=args.use_force,
         go_to_start=args.go_to_start,
         stiffness_ratio=args.stiffness_ratio,
-        control_frequency=args.control_frequency,
+        inner_control_hz=args.inner_control_hz,
+        interpolate_cmds=args.interpolate_cmds,
         enable_tactile_sensors=args.enable_tactile_sensors,
         log_level=args.log_level,
         render_height=args.render_height,
