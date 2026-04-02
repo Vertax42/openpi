@@ -131,9 +131,9 @@ class Args:
     start_position_degree: list[float] = field(default_factory=lambda: [-1.70, 4.48, 1.54, 136.22, 0.12, 41.74, -0.18])
     zero_ft_sensor_on_connect: bool = True
     # inner_control_hz: how often the C++ RT callback (1 kHz) consumes a new
-    #   Python command. Range [1, 1000]. Default=1000 (every 1 ms cycle).
+    #   Python command. Range [1, 1000]. Default=200 (every 5 ms cycle).
     #   e.g. 500 → consume every 2 ms; 100 → every 10 ms.
-    inner_control_hz: int = 1000
+    inner_control_hz: int = 200
     # interpolate_cmds: smooth motion between sparse Python commands via linear interpolation.
     #   Only effective when inner_control_hz < 1000.
     interpolate_cmds: bool = True

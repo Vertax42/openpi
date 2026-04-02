@@ -87,7 +87,7 @@ python -m examples.flexiv_rizon4_rt.main \
 | Parameter | Default | Description |
 |-----------|---------|-------------|
 | `stiffness_ratio` | 0.2 | Cartesian stiffness multiplier (×K_x_nom) |
-| `inner_control_hz` | 1000 | How often the 1 kHz RT loop consumes a new Python command |
+| `inner_control_hz` | 200 | How often the 1 kHz RT loop consumes a new Python command |
 | `interpolate_cmds` | True | Enable linear interpolation between consumed commands |
 | `start_position_degree` | `[-1.70, 4.48, ...]` | Start joint angles (deg) |
 | `zero_ft_sensor_on_connect` | True | Zero FT sensor on startup |

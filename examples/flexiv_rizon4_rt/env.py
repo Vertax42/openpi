@@ -50,7 +50,7 @@ class FlexivRizon4RTEnvironment(_environment.Environment):
         stiffness_ratio: float = 0.2,
         start_position_degree: list[float] | None = None,
         zero_ft_sensor_on_connect: bool = True,
-        inner_control_hz: int = 1000,
+        inner_control_hz: int = 200,
         interpolate_cmds: bool = True,
         # External cameras
         cameras: dict | None = None,

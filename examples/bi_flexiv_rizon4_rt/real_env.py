@@ -39,7 +39,7 @@ class BiFlexivRizon4RTRealEnv:
         use_force: bool = False,
         go_to_start: bool = True,
         stiffness_ratio: float = 0.2,
-        inner_control_hz: int = 1000,
+        inner_control_hz: int = 200,
         interpolate_cmds: bool = True,
         enable_tactile_sensors: bool = True,
         log_level: str = "INFO",
