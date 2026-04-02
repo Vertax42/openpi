@@ -165,6 +165,7 @@ class ActionQueue:
                     new_original_actions,
                     new_processed_actions,
                     truncate_delay,
+                    action_index_before_inference,
                 )
             else:
                 self._append_actions_queue(new_original_actions, new_processed_actions)
@@ -178,33 +179,33 @@ class ActionQueue:
         new_original_actions: np.ndarray,
         new_processed_actions: np.ndarray,
         truncate_delay: int,
+        action_index_before_inference: int = 0,
     ):
         """Replace the queue with new actions (RTC mode).
 
         Args:
             truncate_delay: The delay used to truncate actions (should be estimated_delay
                            that was passed to the model, ensuring consistency).
+            action_index_before_inference: Queue index when inference started, used
+                           for correct prefix alignment comparison.
         """
         truncate_idx = max(0, min(truncate_delay, len(new_original_actions)))
 
-        # Debug: Verify RTC alignment in the delay region
+        # Debug: Verify RTC alignment in the prefix region
+        # new[0:d] should match prev_chunk_left_over[0:d] = old[aib:aib+d]
         if self.original_queue is not None and truncate_idx > 0:
-            # RTC should align: new_actions[0:delay] ≈ prev_left_over[0:delay]
-            # prev_left_over was self.original_queue[self.last_index:] at inference start
-            # So we compare new_actions[0:delay] with old_queue[last_index : last_index+delay]
-            remaining_old = len(self.original_queue) - self.last_index
-            align_len = min(truncate_idx, remaining_old, len(new_original_actions))
+            aib = action_index_before_inference
+            align_len = min(truncate_idx, len(self.original_queue) - aib, len(new_original_actions))
             if align_len > 0:
-                # This is what was passed to model as prev_chunk_left_over
-                old_aligned = self.original_queue[self.last_index : self.last_index + align_len]
+                old_aligned = self.original_queue[aib : aib + align_len]
                 new_aligned = new_original_actions[:align_len]
                 diff_rtc = np.abs(new_aligned - old_aligned)
                 max_diff_rtc = np.max(diff_rtc)
                 mean_diff_rtc = np.mean(diff_rtc)
                 logger.info(
-                    f"RTC Alignment Check: new[0:{align_len}] vs old[{self.last_index}:{self.last_index + align_len}] "
+                    f"RTC Alignment Check: new[0:{align_len}] vs old[{aib}:{aib + align_len}] "
                     f"max={max_diff_rtc:.4f}, mean={mean_diff_rtc:.4f} "
-                    f"(should be small if RTC works correctly)"
+                    f"(should be ~0 for frozen prefix)"
                 )
 
         # Debug: Check actual jump at merge point

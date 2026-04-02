@@ -585,8 +585,8 @@ scp -P 15443 -r root@connect.westd.seetacloud.com:/root/autodl-tmp/openpi/checkp
 ```bash
 # Test policy server connectivity
 nc -zv 192.168.2.215 8000
-nc -zv 192.168.110.68 8000
-Connection to 192.168.110.68 8000 port [tcp/*] succeeded!
+nc -zv 192.168.142.158 8000
+Connection to 192.168.142.158 8000 port [tcp/*] succeeded!
 
 # Run BiARX5 client with tactile sensors
 python -m examples.bi_arx5_real.main \
@@ -599,9 +599,10 @@ python -m examples.bi_arx5_real.main \
 ```bash
 # Run BiFlexiv client
 python -m examples.bi_flexiv_rizon4_rt.main \
-    --args.host 192.168.110.70 \
+    --args.host 192.168.142.158 \
     --args.port 8000 \
     --args.bi_mount_type side \
+    --args.rtc_enabled \
     --args.dry_run
 ```
 
