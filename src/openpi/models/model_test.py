@@ -1,5 +1,6 @@
 from flax import nnx
 import jax
+import jax.numpy as jnp
 import pytest
 
 from openpi.models import model as _model
@@ -36,6 +37,38 @@ def test_pi0_lora_model():
     assert loss.shape == (batch_size, config.action_horizon)
 
     actions = nnx_utils.module_jit(model.sample_actions)(key, obs, num_steps=10)
+    assert actions.shape == (batch_size, model.action_horizon, model.action_dim)
+
+
+def test_pi05_training_time_rtc_model():
+    key = jax.random.key(0)
+    config = pi0_config.Pi0Config(
+        paligemma_variant="dummy",
+        action_expert_variant="dummy",
+        action_dim=8,
+        action_horizon=6,
+        max_token_len=8,
+        pi05=True,
+        enable_training_time_rtc=True,
+        max_delay=5,
+    )
+    model = config.create(key)
+
+    batch_size = 2
+    obs, act = config.fake_obs(batch_size), config.fake_act(batch_size)
+
+    loss = nnx_utils.module_jit(model.compute_loss)(key, obs, act)
+    assert loss.shape == (batch_size, config.action_horizon)
+
+    prev_chunk_left_over = jnp.ones_like(act)
+    inference_delay = jnp.asarray([2, 4], dtype=jnp.int32)
+    actions = nnx_utils.module_jit(model.training_time_rtc_sample_actions)(
+        key,
+        obs,
+        num_steps=4,
+        prev_chunk_left_over=prev_chunk_left_over,
+        inference_delay=inference_delay,
+    )
     assert actions.shape == (batch_size, model.action_horizon, model.action_dim)
 
 

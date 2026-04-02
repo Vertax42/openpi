@@ -506,6 +506,11 @@ XLA_PYTHON_CLIENT_MEM_FRACTION=0.9 python scripts/train.py pi05_base_xense_flare
 python scripts/compute_norm_stats.py --config-name pi05_base_bi_flexiv_pack_6_cosmetic_bottles_lora
 XLA_PYTHON_CLIENT_MEM_FRACTION=0.9 python scripts/train.py pi05_base_bi_flexiv_pack_6_cosmetic_bottles_lora \
     --exp-name=bi_flexiv_pack_6_cosmetic_bottles_lora_20260329 --overwrite
+
+# Assemble box with phone stand test
+python scripts/compute_norm_stats.py --config-name pi05_base_bi_flexiv_assemble_box_with_phone_stand_test_lora
+XLA_PYTHON_CLIENT_MEM_FRACTION=0.9 python scripts/train.py pi05_base_bi_flexiv_assemble_box_with_phone_stand_test_lora \
+    --exp-name=bi_flexiv_assemble_box_with_phone_stand_test_lora_20260329 --overwrite
 ```
 
 ### Deployment Commands
@@ -569,6 +574,13 @@ python scripts/serve_policy.py \
     policy:checkpoint \
     --policy.config=pi05_base_bi_flexiv_pack_6_cosmetic_bottles_lora \
     --policy.dir=checkpoints/pi05_base_bi_flexiv_pack_6_cosmetic_bottles_lora/bi_flexiv_pack_6_cosmetic_bottles_lora_20260329/19999
+
+# Assemble box with phone stand test
+python scripts/serve_policy.py \
+    --default-prompt="assemble the box with the phone stand" \
+    policy:checkpoint \
+    --policy.config=pi05_base_bi_flexiv_assemble_box_with_phone_stand_test_lora \
+    --policy.dir=checkpoints/pi05_base_bi_flexiv_assemble_box_with_phone_stand_test_lora/bi_flexiv_assemble_box_with_phone_stand_test_lora_20260329/19999
 ```
 
 ### Utilities
@@ -601,9 +613,13 @@ python -m examples.bi_arx5_real.main \
 python -m examples.bi_flexiv_rizon4_rt.main \
     --args.host 192.168.142.158 \
     --args.port 8000 \
-    --args.bi_mount_type side \
-    --args.rtc_enabled \
-    --args.dry_run
+    --args.bi-mount-type side \
+    --args.inner-control-hz 1000 \
+    --args.interpolate-cmds \
+    --args.runtime-hz 30 \
+    --args.log-level INFO \
+    --args.rtc-enabled \
+    --args.dry-run
 ```
 
 ---

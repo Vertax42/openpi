@@ -46,23 +46,19 @@ def make_attn_mask(input_mask, mask_ar):
 
 @at.typecheck
 def posemb_sincos(
-    pos: at.Real[at.Array, " b"],
+    pos: at.Real[at.Array, "*shape"],
     embedding_dim: int,
     min_period: float,
     max_period: float,
-) -> at.Float[at.Array, "b {embedding_dim}"]:
-    """Computes sine-cosine positional embedding vectors for scalar positions."""
+) -> at.Float[at.Array, "*shape {embedding_dim}"]:
+    """Computes sine-cosine positional embeddings for scalar or token-wise positions."""
     if embedding_dim % 2 != 0:
         raise ValueError(f"embedding_dim ({embedding_dim}) must be divisible by 2")
 
+    pos = jnp.asarray(pos)
     fraction = jnp.linspace(0.0, 1.0, embedding_dim // 2)
     period = min_period * (max_period / min_period) ** fraction
-    sinusoid_input = jnp.einsum(
-        "i,j->ij",
-        pos,
-        1.0 / period * 2 * jnp.pi,
-        precision=jax.lax.Precision.HIGHEST,
-    )
+    sinusoid_input = pos[..., None] * (1.0 / period * 2 * jnp.pi)
     return jnp.concatenate([jnp.sin(sinusoid_input), jnp.cos(sinusoid_input)], axis=-1)
 
 
@@ -155,12 +151,12 @@ class Pi0(_model.BaseModel):
         self,
         obs: _model.Observation,
         noisy_actions: _model.Actions,
-        timestep: at.Float[at.Array, " b"],
+        timestep: at.Float[at.Array, " b"] | at.Float[at.Array, "b ah"],
     ) -> tuple[
         at.Float[at.Array, "b s emb"],
         at.Bool[at.Array, "b s"],
         at.Bool[at.Array, " s"],
-        at.Float[at.Array, "b emb"] | None,
+        at.Float[at.Array, "b emb"] | at.Float[at.Array, "b s emb"] | None,
     ]:
         input_mask = []
         ar_mask = []
@@ -174,6 +170,18 @@ class Pi0(_model.BaseModel):
             ar_mask += [True]
 
         action_tokens = self.action_in_proj(noisy_actions)
+        if timestep.ndim == 1:
+            if timestep.shape[0] != noisy_actions.shape[0]:
+                raise ValueError(
+                    f"Expected timestep batch dimension {noisy_actions.shape[0]}, got {timestep.shape[0]}"
+                )
+        elif timestep.ndim == 2:
+            expected_shape = noisy_actions.shape[:2]
+            if timestep.shape != expected_shape:
+                raise ValueError(f"Expected per-action timestep shape {expected_shape}, got {timestep.shape}")
+        else:
+            raise ValueError(f"Expected timestep ndim 1 or 2, got {timestep.ndim}")
+
         # embed timestep using sine-cosine positional encoding with sensitivity in the range [0, 1]
         time_emb = posemb_sincos(timestep, self.action_in_proj.out_features, min_period=4e-3, max_period=4.0)
         if self.pi05:
@@ -186,7 +194,10 @@ class Pi0(_model.BaseModel):
             adarms_cond = time_emb
         else:
             # mix timestep + action information using an MLP (no adaRMS)
-            time_tokens = einops.repeat(time_emb, "b emb -> b s emb", s=self.action_horizon)
+            if time_emb.ndim == 2:
+                time_tokens = einops.repeat(time_emb, "b emb -> b s emb", s=self.action_horizon)
+            else:
+                time_tokens = time_emb
             action_time_tokens = jnp.concatenate([action_tokens, time_tokens], axis=-1)
             action_time_tokens = self.action_time_mlp_in(action_time_tokens)
             action_time_tokens = nnx.swish(action_time_tokens)
@@ -272,9 +283,8 @@ class Pi0(_model.BaseModel):
         action_prefix_mask = jnp.arange(ah)[None, :] < delay[:, None]
 
         # Compute x_t: prefix uses clean actions (time=0.0), postfix uses noisy actions
-        # expand time to (b, ah, 1) for broadcasting
-        time_expanded = jnp.where(action_prefix_mask, 0.0, time[:, None])[:, :, None]
-        x_t = time_expanded * noise + (1 - time_expanded) * actions
+        time_masked = jnp.where(action_prefix_mask, 0.0, time[:, None])
+        x_t = time_masked[:, :, None] * noise + (1 - time_masked[:, :, None]) * actions
         u_t = noise - actions
 
         # one big forward pass of prefix + suffix at once
@@ -282,7 +292,7 @@ class Pi0(_model.BaseModel):
         suffix_tokens, suffix_input_mask, suffix_ar_mask, adarms_cond = self.embed_suffix(
             observation,
             x_t,
-            time,  # time is (b,) - use postfix time for embedding
+            time_masked,
         )
         input_mask = jnp.concatenate([prefix_input_mask, suffix_input_mask], axis=1)
         ar_mask = jnp.concatenate([prefix_ar_mask, suffix_ar_mask], axis=0)
@@ -446,15 +456,15 @@ class Pi0(_model.BaseModel):
         def step(carry):
             x_t, time = carry
 
-            # Replace prefix part with action_prefix at each step
-            # This ensures prefix actions are always clean (as observed actions)
+            # Re-freeze the action prefix before every denoising step so sampling
+            # stays aligned with the current RTC training loss semantics: the
+            # prefix is always treated as clean conditioning, while only the
+            # postfix is denoised.
             x_t = jnp.where(action_prefix_mask[:, :, None], action_prefix, x_t)
+            time_masked = jnp.where(action_prefix_mask, 0.0, time)
 
-            # Pass scalar time (broadcast to (b,)) to embed_suffix
-            # The time embedding represents the denoising level for the whole sequence
-            # Note: x_t already has clean actions in prefix, noisy in postfix
             suffix_tokens, suffix_mask, suffix_ar_mask, adarms_cond = self.embed_suffix(
-                observation, x_t, jnp.broadcast_to(time, (batch_size,))
+                observation, x_t, time_masked
             )
             # `suffix_attn_mask` is shape (b, suffix_len, suffix_len) indicating how the suffix tokens can attend to each
             # other

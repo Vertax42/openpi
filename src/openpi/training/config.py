@@ -1097,6 +1097,35 @@ _CONFIGS = [
         fsdp_devices=1,
     ),
     TrainConfig(
+        name="pi05_base_bi_flexiv_assemble_box_with_phone_stand_test_lora",
+        model=pi0_config.Pi0Config(
+            paligemma_variant="gemma_2b_lora",
+            action_expert_variant="gemma_300m",
+            pi05=True,
+            enable_training_time_rtc=True,
+            max_delay=10,
+        ),
+        data=LeRobotBiFlexivDataConfig(
+            repo_id="Xense/assemble_box_with_phone_stand_test",
+            use_delta_cartesian_actions=True,
+            default_prompt="Assemble the packaging by folding the flat box into shape, placing the metal phone stand inside, and closing the box properly.",
+            base_config=DataConfig(
+                prompt_from_task=True,
+            ),
+        ),
+        ema_decay=None,
+        freeze_filter=pi0_config.Pi0Config(
+            pi05=True,
+            paligemma_variant="gemma_2b_lora",
+            # action_expert_variant="gemma_300m_lora",
+        ).get_freeze_filter(),
+        batch_size=64,
+        weight_loader=weight_loaders.CheckpointWeightLoader("gs://openpi-assets/checkpoints/pi05_base/params"),
+        num_train_steps=20_000,
+        num_workers=2,
+        fsdp_devices=1,
+    ),
+    TrainConfig(
         name="debug_pi05",
         model=pi0_config.Pi0Config(pi05=True, paligemma_variant="dummy", action_expert_variant="dummy"),
         data=FakeDataConfig(),
