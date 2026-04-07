@@ -15,7 +15,7 @@ import time
 import dm_env
 from lerobot.robots.flexiv_rizon4_rt.config_flexiv_rizon4_rt import FlexivRizon4RTConfig
 from lerobot.robots.utils import make_robot_from_config
-from lerobot.utils.robot_utils import get_logger
+from lerobot.utils.robot_utils import emergency_stop_flexiv_rt_robot, get_logger
 import numpy as np
 
 logger = get_logger("FlexivRizon4RTRealEnv")
@@ -61,7 +61,7 @@ class FlexivRizon4RTRealEnv:
         start_position_degree: list[float] | None = None,
         zero_ft_sensor_on_connect: bool = True,
         inner_control_hz: int = 1000,
-        interpolate_cmds: bool = False,
+        interpolate_cmds: bool = True,
         # External cameras (scene cameras)
         cameras: dict | None = None,
     ):
@@ -208,3 +208,5 @@ class FlexivRizon4RTRealEnv:
                 logger.info("Flexiv Rizon4 RT robot disconnected")
             except Exception as e:
                 logger.warning(f"Error during Flexiv Rizon4 RT disconnect: {e}")
+                if emergency_stop_flexiv_rt_robot(self.robot, logger):
+                    logger.warning("Emergency stop fallback completed for Flexiv Rizon4 RT")

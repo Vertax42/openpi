@@ -28,9 +28,8 @@ ArrayT = TypeVar("ArrayT", bound=jax.Array | torch.Tensor | np.ndarray)
 
 
 class ActionSelectKwargs(TypedDict, total=False):
-    inference_delay: int | None
-    prev_chunk_left_over: at.Array | None
-    execution_horizon: int | None
+    action_prefix: at.Array | None
+    inference_delay: int | at.Array | None
 
 
 class ModelType(enum.Enum):

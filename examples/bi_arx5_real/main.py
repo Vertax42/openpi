@@ -131,14 +131,8 @@ class Args:
 
     # RTC config
     rtc_enabled: bool = False
-    # Threshold to request new actions, when action queue size is less than this value, new actions will be requested
-    action_queue_size_to_get_new_actions: int = 20
-    # Sample action with rtc horizon
-    execution_horizon: int = 30  # execution_horizon for rtc_action_chunk_broker
-    # Number of steps to blend between old and new actions at merge point
-    # 0 = no blending (hard switch), 2-3 = smooth transition
-    blend_steps: int = 5
-    # Default inference_delay for warmup and fallback (in steps)
+    action_dim: int = 32  # must match model config
+    request_threshold: int = 20
     default_delay: int = 2
 
     # Recording (LeRobot format, raw HWC images + absolute actions)
@@ -201,10 +195,9 @@ def main(args: Args) -> None:
                 policy=rtc_action_chunk_broker.RTCActionChunkBroker(
                     policy=ws_client_policy,
                     frequency_hz=args.runtime_hz,
-                    action_queue_size_to_get_new_actions=args.action_queue_size_to_get_new_actions,
-                    rtc_enabled=args.rtc_enabled,
-                    execution_horizon=args.execution_horizon,
-                    blend_steps=args.blend_steps,
+                    action_horizon=args.action_horizon,
+                    action_dim=args.action_dim,
+                    request_threshold=args.request_threshold,
                     default_delay=args.default_delay,
                 )
             ),

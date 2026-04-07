@@ -51,7 +51,7 @@ class FlexivRizon4RTEnvironment(_environment.Environment):
         start_position_degree: list[float] | None = None,
         zero_ft_sensor_on_connect: bool = True,
         inner_control_hz: int = 1000,
-        interpolate_cmds: bool = False,
+        interpolate_cmds: bool = True,
         # External cameras
         cameras: dict | None = None,
     ) -> None:

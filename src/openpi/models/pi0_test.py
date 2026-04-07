@@ -1,6 +1,9 @@
 import flax.nnx as nnx
 import jax
+import jax.numpy as jnp
 
+import openpi.models.gemma as _gemma
+import openpi.models.pi0 as _pi0
 import openpi.models.pi0_config as _pi0_config
 
 
@@ -44,3 +47,22 @@ def test_pi0_all_lora():
     assert len(state) == 17
     assert all("lora" not in p for p in state)
     assert all("llm" in p for p in state)
+
+
+def test_posemb_sincos_supports_tokenwise_positions():
+    pos = jnp.array([[0.0, 0.25, 0.5], [0.75, 1.0, 0.5]], dtype=jnp.float32)
+    emb = _pi0.posemb_sincos(pos, embedding_dim=8, min_period=4e-3, max_period=4.0)
+
+    assert emb.shape == (2, 3, 8)
+
+
+def test_rmsnorm_supports_tokenwise_adarms_conditioning():
+    x = jnp.ones((2, 3, 4), dtype=jnp.float32)
+    cond = jnp.ones((2, 3, 4), dtype=jnp.float32)
+
+    rmsnorm = _gemma.RMSNorm()
+    variables = rmsnorm.init(jax.random.key(0), x, cond)
+    y, gate = rmsnorm.apply(variables, x, cond)
+
+    assert y.shape == x.shape
+    assert gate.shape == x.shape

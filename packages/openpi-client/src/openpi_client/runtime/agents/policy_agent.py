@@ -16,3 +16,7 @@ class PolicyAgent(_agent.Agent):
 
     def reset(self) -> None:
         self._policy.reset()
+
+    @override
+    def warmup(self, observation: dict) -> None:
+        self._policy.warmup(observation)

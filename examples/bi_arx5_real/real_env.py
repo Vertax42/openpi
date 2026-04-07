@@ -51,7 +51,7 @@ class BiARX5RealEnv:
         setup_robot: bool = True,
         controller_dt: float = 0.002,  # low-level control frequency (seconds)
         preview_time: float = 0.02,  # preview time (seconds)
-        control_mode: str = "teach_mode",
+        resetcontrol_mode: str = "teach_mode",
     ):
         self._reset_position = reset_position if reset_position else DEFAULT_RESET_POSITION
 

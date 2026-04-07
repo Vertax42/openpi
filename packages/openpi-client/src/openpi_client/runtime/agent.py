@@ -15,3 +15,14 @@ class Agent(abc.ABC):
     @abc.abstractmethod
     def reset(self) -> None:
         """Reset the agent to its initial state."""
+
+    def warmup(self, observation: dict) -> None:
+        """Pre-warm the agent before the episode control loop starts.
+
+        Called once after reset() and before the first get_action() call.
+        Default is a no-op; override in subclasses that need JIT warm-up.
+
+        Args:
+            observation: A real observation from the environment.
+        """
+        pass

@@ -53,25 +53,18 @@ For all models, we provide _base model_ checkpoints, pre-trained on 10k+ hours o
 
 ## Installation
 
-When cloning this repo, make sure to update submodules:
+We use the `lerobot-xense` mamba environment as the base, then install openpi into it:
 
 ```bash
-git clone --recurse-submodules git@github.com:Physical-Intelligence/openpi.git
-
-# Or if you already cloned the repo:
+# Clone with submodules
+git clone --recurse-submodules git@github.com:Vertax42/openpi.git
+# Or if you already cloned:
 git submodule update --init --recursive
-```
 
-We use [uv](https://docs.astral.sh/uv/) to manage Python dependencies. See the [uv installation instructions](https://docs.astral.sh/uv/getting-started/installation/) to set it up. Once uv is installed, run the following to set up the environment:
-
-```bash
-GIT_LFS_SKIP_SMUDGE=1 uv sync
+# Activate the base environment and install openpi
+mamba activate lerobot-xense
 GIT_LFS_SKIP_SMUDGE=1 uv pip install -e .
 ```
-
-NOTE: `GIT_LFS_SKIP_SMUDGE=1` is needed to pull LeRobot as a dependency.
-
-**Docker**: As an alternative to uv installation, we provide instructions for installing openpi using Docker. If you encounter issues with your system setup, consider using Docker to simplify installation. See [Docker Setup](docs/docker.md) for more details.
 
 ## Model Checkpoints
 
@@ -199,18 +192,17 @@ openpi now provides PyTorch implementations of π₀ and π₀.₅ models alongs
 
 ### Setup
 
-1. Make sure that you have the latest version of all dependencies installed: `uv sync`
+1. Make sure transformers 4.53.2 is installed: `pip show transformers`
 
-2. Double check that you have transformers 4.53.2 installed: `uv pip show transformers`
-
-3. Apply the transformers library patches:
+2. Apply the transformers library patches (adjust the site-packages path for your Python version):
    ```bash
-   cp -r ./src/openpi/models_pytorch/transformers_replace/* .venv/lib/python3.11/site-packages/transformers/
+   # Find your site-packages path
+   python -c "import transformers; print(transformers.__file__)"
+   # Copy patches
+   cp -r ./src/openpi/models_pytorch/transformers_replace/* $(python -c "import transformers, os; print(os.path.dirname(transformers.__file__))")/
    ```
 
 This overwrites several files in the transformers library with necessary model changes: 1) supporting AdaRMS, 2) correctly controlling the precision of activations, and 3) allowing the KV cache to be used without being updated.
-
-**WARNING**: With the default uv link mode (hardlink), this will permanently affect the transformers library in your uv cache, meaning the changes will survive reinstallations of transformers and could even propagate to other projects that use transformers. To fully undo this operation, you must run `uv cache clean transformers`.
 
 ### Converting JAX Models to PyTorch
 
@@ -316,7 +308,7 @@ We will collect common issues and their solutions here. If you encounter an issu
 
 | Issue                                     | Resolution                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 | ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `uv sync` fails with dependency conflicts | Try removing the virtual environment directory (`rm -rf .venv`) and running `uv sync` again. If issues persist, check that you have the latest version of `uv` installed (`uv self update`).                                                                                                                                                                                                                                                                                                                        |
+| Dependency conflicts                      | Make sure you are in the `lerobot-xense` mamba environment, then run `GIT_LFS_SKIP_SMUDGE=1 uv pip install -e .` to install openpi.                                                                                                                                                                                                                                                                                                                                                                                 |
 | Training runs out of GPU memory           | Make sure you set `XLA_PYTHON_CLIENT_MEM_FRACTION=0.9` (or higher) before running training to allow JAX to use more GPU memory. You can also use `--fsdp-devices <n>` where `<n>` is your number of GPUs, to enable [fully-sharded data parallelism](https://engineering.fb.com/2021/07/15/open-source/fsdp/), which reduces memory usage in exchange for slower training (the amount of slowdown depends on your particular setup). If you are still running out of memory, you may way to consider disabling EMA. |
 | Policy server connection errors           | Check that the server is running and listening on the expected port. Verify network connectivity and firewall settings between client and server.                                                                                                                                                                                                                                                                                                                                                                   |
 | Missing norm stats error when training    | Run `scripts/compute_norm_stats.py` with your config name before starting training.                                                                                                                                                                                                                                                                                                                                                                                                                                 |
@@ -498,6 +490,7 @@ python scripts/compute_norm_stats.py --config-name pi05_base_xense_flare_pick_an
 XLA_PYTHON_CLIENT_MEM_FRACTION=0.9 python scripts/train.py pi05_base_xense_flare_pick_and_place_cube \
     --exp-name=xense_flare_pick_and_place_cube_20260115 --overwrite
 ```
+
 ### BiFlexiv Platform
 
 ```bash
@@ -505,6 +498,11 @@ XLA_PYTHON_CLIENT_MEM_FRACTION=0.9 python scripts/train.py pi05_base_xense_flare
 python scripts/compute_norm_stats.py --config-name pi05_base_bi_flexiv_pack_6_cosmetic_bottles_lora
 XLA_PYTHON_CLIENT_MEM_FRACTION=0.9 python scripts/train.py pi05_base_bi_flexiv_pack_6_cosmetic_bottles_lora \
     --exp-name=bi_flexiv_pack_6_cosmetic_bottles_lora_20260329 --overwrite
+
+# Assemble box with phone stand test
+python scripts/compute_norm_stats.py --config-name pi05_base_bi_flexiv_assemble_box_with_phone_stand_test_lora
+XLA_PYTHON_CLIENT_MEM_FRACTION=0.9 python scripts/train.py pi05_base_bi_flexiv_assemble_box_with_phone_stand_test_lora \
+    --exp-name=bi_flexiv_assemble_box_with_phone_stand_test_lora_20260403 --overwrite
 ```
 
 ### Deployment Commands
@@ -534,29 +532,22 @@ python scripts/serve_policy.py \
     --policy.dir=checkpoints/pi05_base_arx5_lora_pick_and_place_chips/pi05_base_arx5_lora_pick_and_place_chips_20251204/19999
 ```
 
-#### Xense Flare Platform Inference
+#### BiFlexiv Platform Inference
 
 ```bash
-# Open lock with key
+# Pack 6 cosmetic bottles into the carton
 python scripts/serve_policy.py \
-    --default-prompt="open the lock with the key" \
+    --default-prompt="pack 6 cosmetic bottles into the carton" \
     policy:checkpoint \
-    --policy.config=pi05_base_xense_flare_open_lock \
-    --policy.dir=checkpoints/pi05_base_xense_flare_open_lock/xense_flare_open_lock_20260108/19999
+    --policy.config=pi05_base_bi_flexiv_pack_6_cosmetic_bottles_lora \
+    --policy.dir=checkpoints/pi05_base_bi_flexiv_pack_6_cosmetic_bottles_lora/bi_flexiv_pack_6_cosmetic_bottles_lora_20260329/19999
 
-# Wipe vase
+# Assemble box with phone stand test
 python scripts/serve_policy.py \
-    --default-prompt="wipe the vase" \
+    --default-prompt="assemble the box with the phone stand" \
     policy:checkpoint \
-    --policy.config=pi05_base_xense_flare_wipe_vase \
-    --policy.dir=checkpoints/pi05_base_xense_flare_wipe_vase/xense_flare_wipe_vase_20260113/19999
-
-# Pick and place cube (RGB order)
-python scripts/serve_policy.py \
-    --default-prompt="pick up cubes in rgb order from the table and place them in the blue box" \
-    policy:checkpoint \
-    --policy.config=pi05_base_xense_flare_pick_and_place_cube \
-    --policy.dir=checkpoints/pi05_base_xense_flare_pick_and_place_cube/xense_flare_pick_and_place_cube_20260115/39999
+    --policy.config=pi05_base_bi_flexiv_assemble_box_with_phone_stand_test_lora \
+    --policy.dir=checkpoints/pi05_base_bi_flexiv_assemble_box_with_phone_stand_test_lora/bi_flexiv_assemble_box_with_phone_stand_test_lora_20260329/19999
 ```
 
 ### Utilities
@@ -573,6 +564,8 @@ scp -P 15443 -r root@connect.westd.seetacloud.com:/root/autodl-tmp/openpi/checkp
 ```bash
 # Test policy server connectivity
 nc -zv 192.168.2.215 8000
+nc -zv 192.168.142.158 8000
+Connection to 192.168.142.158 8000 port [tcp/*] succeeded!
 
 # Run BiARX5 client with tactile sensors
 python -m examples.bi_arx5_real.main \
@@ -580,6 +573,20 @@ python -m examples.bi_arx5_real.main \
     --args.port 8000 \
     --args.dry_run \
     --args.enable_tactile_sensors
+```
+
+```bash
+# Run BiFlexiv client
+python -m examples.bi_flexiv_rizon4_rt.main \
+    --args.host 192.168.142.158 \
+    --args.port 8000 \
+    --args.bi-mount-type side \
+    --args.inner-control-hz 1000 \
+    --args.interpolate-cmds \
+    --args.runtime-hz 30 \
+    --args.log-level INFO \
+    --args.rtc-enabled \
+    --args.dry-run
 ```
 
 ---

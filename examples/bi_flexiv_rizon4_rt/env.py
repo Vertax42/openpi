@@ -11,6 +11,13 @@ import examples.bi_flexiv_rizon4_rt.real_env as _real_env
 
 logger = get_logger("BiFlexivRizon4RTEnv")
 
+# Action dimension labels for debug logging (20D Cartesian)
+_ACTION_LABELS = [
+    "L.x", "L.y", "L.z", "L.r1", "L.r2", "L.r3", "L.r4", "L.r5", "L.r6",
+    "R.x", "R.y", "R.z", "R.r1", "R.r2", "R.r3", "R.r4", "R.r5", "R.r6",
+    "L.grip", "R.grip",
+]
+
 
 class BiFlexivRizon4RTEnvironment(_environment.Environment):
     """OpenPI environment for BiFlexiv Rizon4 RT dual-arm robot.
@@ -28,7 +35,8 @@ class BiFlexivRizon4RTEnvironment(_environment.Environment):
         use_force: bool = False,
         go_to_start: bool = True,
         stiffness_ratio: float = 0.2,
-        control_frequency: float = 100.0,
+        inner_control_hz: int = 1000,
+        interpolate_cmds: bool = True,
         enable_tactile_sensors: bool = True,
         log_level: str = "INFO",
         render_height: int = 224,
@@ -40,7 +48,8 @@ class BiFlexivRizon4RTEnvironment(_environment.Environment):
             use_force=use_force,
             go_to_start=go_to_start,
             stiffness_ratio=stiffness_ratio,
-            control_frequency=control_frequency,
+            inner_control_hz=inner_control_hz,
+            interpolate_cmds=interpolate_cmds,
             enable_tactile_sensors=enable_tactile_sensors,
             log_level=log_level,
             setup_robot=setup_robot,
@@ -48,10 +57,12 @@ class BiFlexivRizon4RTEnvironment(_environment.Environment):
         self._render_height = render_height
         self._render_width = render_width
         self._ts = None
+        self._step_count = 0
 
     @override
     def reset(self) -> None:
         self._ts = self._env.reset()
+        self._step_count = 0
 
     @override
     def is_episode_complete(self) -> bool:
@@ -86,6 +97,11 @@ class BiFlexivRizon4RTEnvironment(_environment.Environment):
 
     @override
     def apply_action(self, action: dict) -> None:
+        self._step_count += 1
+        actions = action.get("actions")
+        if actions is not None:
+            parts = " | ".join(f"{l}={v:+.4f}" for l, v in zip(_ACTION_LABELS, actions))
+            logger.debug(f"Step {self._step_count}: {parts}")
         self._ts = self._env.step(action["actions"])
 
     def disconnect(self) -> None:

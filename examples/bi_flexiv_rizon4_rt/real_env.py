@@ -13,7 +13,7 @@ import time
 import dm_env
 from lerobot.robots.bi_flexiv_rizon4_rt.config_bi_flexiv_rizon4_rt import BiFlexivRizon4RTConfig
 from lerobot.robots.utils import make_robot_from_config
-from lerobot.utils.robot_utils import get_logger
+from lerobot.utils.robot_utils import emergency_stop_flexiv_rt_robot, get_logger
 import numpy as np
 
 logger = get_logger("BiFlexivRizon4RTRealEnv")
@@ -39,7 +39,8 @@ class BiFlexivRizon4RTRealEnv:
         use_force: bool = False,
         go_to_start: bool = True,
         stiffness_ratio: float = 0.2,
-        control_frequency: float = 100.0,
+        inner_control_hz: int = 1000,
+        interpolate_cmds: bool = True,
         enable_tactile_sensors: bool = True,
         log_level: str = "INFO",
         setup_robot: bool = True,
@@ -49,7 +50,8 @@ class BiFlexivRizon4RTRealEnv:
             use_force=use_force,
             go_to_start=go_to_start,
             stiffness_ratio=stiffness_ratio,
-            control_frequency=control_frequency,
+            inner_control_hz=inner_control_hz,
+            interpolate_cmds=interpolate_cmds,
             enable_tactile_sensors=enable_tactile_sensors,
             log_level=log_level,
         )
@@ -107,11 +109,17 @@ class BiFlexivRizon4RTRealEnv:
             logger.info("Resetting BiFlexiv Rizon4 RT to start positions...")
             try:
                 self.robot.reset_to_initial_position()
-                # Wait for the non-blocking RT trajectory to complete
-                timeout = 15.0
-                start = time.time()
+                # Block until the non-blocking RT trajectory actually finishes.
+                # Phase 1: wait for is_moving to become True (RT thread picks up request).
+                # Phase 2: wait for is_moving to become False (trajectory complete).
+                t0 = time.time()
+                while not self.robot.rt_moving:
+                    if time.time() - t0 > 1.0:
+                        logger.warning("RT trajectory never started, proceeding anyway")
+                        break
+                    time.sleep(0.001)
                 while self.robot.rt_moving:
-                    if time.time() - start > timeout:
+                    if time.time() - t0 > 15.0:
                         logger.warning("Reset trajectory timeout, proceeding anyway")
                         break
                     time.sleep(0.05)
@@ -133,6 +141,8 @@ class BiFlexivRizon4RTRealEnv:
         Args:
             action: [left_tcp(0-8), right_tcp(9-17), left_gripper(18), right_gripper(19)]
         """
+        import time as _time
+
         action_dict = {}
         # Left TCP (0-8)
         action_dict["left_tcp.x"] = float(action[0])
@@ -146,21 +156,31 @@ class BiFlexivRizon4RTRealEnv:
         action_dict["right_tcp.z"] = float(action[11])
         for i in range(6):
             action_dict[f"right_tcp.r{i + 1}"] = float(action[12 + i])
-        # Grippers (18, 19) — clamp to [0, 1]
+        # Grippers (18, 19)
         action_dict["left_gripper.pos"] = float(np.clip(action[18], 0.0, 1.0))
         action_dict["right_gripper.pos"] = float(np.clip(action[19], 0.0, 1.0))
 
+        t0 = _time.time()
         try:
             self.robot.send_action(action_dict)
         except Exception as e:
             logger.error(f"Failed to send action: {e}")
             raise
+        t1 = _time.time()
+
+        obs = self.get_observation()
+        t2 = _time.time()
+
+        logger.debug(
+            f"step(): send_action={((t1-t0)*1000):.2f}ms | "
+            f"get_obs={((t2-t1)*1000):.2f}ms"
+        )
 
         return dm_env.TimeStep(
             step_type=dm_env.StepType.MID,
             reward=self.get_reward(),
             discount=None,
-            observation=self.get_observation(),
+            observation=obs,
         )
 
     def disconnect(self) -> None:
@@ -173,3 +193,5 @@ class BiFlexivRizon4RTRealEnv:
                 logger.info("BiFlexiv Rizon4 RT disconnected")
             except Exception as e:
                 logger.warning(f"Error during disconnect: {e}")
+                if emergency_stop_flexiv_rt_robot(self.robot, logger):
+                    logger.warning("Emergency stop fallback completed for BiFlexiv Rizon4 RT")
