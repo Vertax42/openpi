@@ -1,14 +1,15 @@
 import math
 import threading
 import time
-from typing import Dict, Optional
+from collections import deque
+from typing import Deque, Dict, Optional
 
 import numpy as np  # noqa: F401
 from typing_extensions import override
 
-from openpi_client import base_policy as _base_policy
-from openpi_client.action_queue import ActionQueue
-from openpi_client.latency_tracker import LatencyTracker
+from xense_client import base_policy as _base_policy
+from xense_client.action_queue import ActionQueue
+from xense_client.latency_tracker import LatencyTracker
 from lerobot.utils.robot_utils import get_logger
 
 logger = get_logger("RTCActionChunkBroker")
@@ -23,11 +24,34 @@ class RTCActionChunkBroker(_base_policy.BasePolicy):
     - Latency tracking (basic)
     - Action queue management (merging/replacing based on delay)
 
+    Delay estimation strategy (important for smoothness):
+        The model freezes the FIRST ``inference_delay`` actions of the newly
+        generated chunk as a copy of ``prev_chunk_left_over`` (the frozen
+        prefix). At merge time the queue truncates at ``real_delay`` (the
+        steps actually consumed during inference). For smooth transitions we
+        need ``real_delay <= estimated_delay`` so the truncation point falls
+        inside the frozen prefix (where new_actions == old_actions byte for
+        byte). To achieve this, we take the MAX of the recent real delays
+        and add ``delay_margin`` on top, rather than using just the last
+        observed delay.
+
     Args:
         policy: The underlying policy (e.g., WebsocketClientPolicy).
         frequency_hz: The control frequency in Hz.
         action_queue_size_to_get_new_actions: Threshold to request new actions.
         rtc_enabled: Whether to enable RTC mode (replace queue) or append mode.
+        execution_horizon: Informational execution horizon forwarded to the
+            policy. Not used for queue trigger logic.
+        blend_steps: Number of steps to linearly blend old/new actions at the
+            merge point. 0 disables blending.
+        default_delay: Fallback ``inference_delay`` used during warmup and
+            before any real delay has been measured.
+        delay_margin: Safety margin added on top of ``max(recent_real_delays)``
+            when computing the delay sent to the model. Larger values are
+            safer (guarantee real_delay <= estimated_delay) but shrink the
+            usable denoised postfix. 2 is a reasonable default for latencies
+            that jitter by a couple of control steps.
+        delay_history_size: Number of past real delays tracked for the max.
         dry_run: If True, each infer() includes ``rtc_metrics`` (delay, round-trip ms, etc.).
     """
 
@@ -40,6 +64,8 @@ class RTCActionChunkBroker(_base_policy.BasePolicy):
         execution_horizon: int = 20,
         blend_steps: int = 0,
         default_delay: int = 4,  # Default inference_delay for warmup and fallback
+        delay_margin: int = 2,  # Safety margin added to the estimated delay
+        delay_history_size: int = 10,  # Number of recent delays tracked
         dry_run: bool = False,
     ):
         self._policy = policy
@@ -48,6 +74,7 @@ class RTCActionChunkBroker(_base_policy.BasePolicy):
         self._action_queue_size_to_get_new_actions = action_queue_size_to_get_new_actions
         self._execution_horizon = execution_horizon
         self._default_delay = default_delay
+        self._delay_margin = max(0, int(delay_margin))
 
         self._action_queue = ActionQueue(rtc_enabled=rtc_enabled, blend_steps=blend_steps)
         self._latency_tracker = LatencyTracker()
@@ -58,8 +85,11 @@ class RTCActionChunkBroker(_base_policy.BasePolicy):
         self._latest_obs: Optional[Dict] = None
         self._latest_obs_lock = threading.Lock()
 
-        # Track last real_delay to use as next estimated_delay
+        # Track last real_delay (kept for metrics/logging).
         self._last_real_delay: Optional[int] = None
+        # Rolling window of recent real delays; we take the max of this as
+        # the base estimate so that transient latency spikes dominate.
+        self._recent_real_delays: Deque[int] = deque(maxlen=max(1, int(delay_history_size)))
 
         # Track warmup state: first inference is for JIT, second is for real execution
         self._warmup_done = False
@@ -120,11 +150,30 @@ class RTCActionChunkBroker(_base_policy.BasePolicy):
                             )
                     else:
                         # ===== NORMAL OPERATION =====
-                        # Estimate inference delay using last real_delay if available
-                        if self._last_real_delay is not None:
-                            estimated_delay_steps = self._last_real_delay
+                        # Conservative estimated_delay: max(recent real delays) + margin.
+                        #
+                        # Why conservative? The model freezes new_actions[0:estimated_delay]
+                        # as an exact copy of prev_chunk_left_over. At merge time the queue
+                        # truncates at real_delay. If real_delay <= estimated_delay the
+                        # truncation point lies inside the frozen prefix, so the first
+                        # action executed from the new chunk is identical to what the
+                        # old queue would have returned -> zero discontinuity. Using the
+                        # raw last delay (as before) makes real_delay > estimated_delay
+                        # about half the time, which causes jitter.
+                        if self._recent_real_delays:
+                            base_delay = max(self._recent_real_delays)
+                            estimated_delay_steps = base_delay + self._delay_margin
                         else:
                             estimated_delay_steps = self._default_delay
+
+                        # Clamp to the amount of prefix actually available in the queue.
+                        # The model will pad with zeros if the prefix is too short, so
+                        # estimated_delay must not exceed qsize or we'd freeze zero
+                        # actions as prefix.
+                        current_qsize = self._action_queue.qsize()
+                        if current_qsize > 0:
+                            estimated_delay_steps = min(estimated_delay_steps, current_qsize)
+                        estimated_delay_steps = max(0, estimated_delay_steps)
 
                         # Get leftover actions for RTC guidance
                         # Use fixed_length to prevent JAX recompilation on shape changes
@@ -132,8 +181,10 @@ class RTCActionChunkBroker(_base_policy.BasePolicy):
                             fixed_length=self._action_queue_size_to_get_new_actions
                         )
                         logger.info(
-                            f"RTC: Starting inference. Queue size: {self._action_queue.qsize()}, "
-                            f"estimated_delay={estimated_delay_steps}, "
+                            f"RTC: Starting inference. Queue size: {current_qsize}, "
+                            f"estimated_delay={estimated_delay_steps} "
+                            f"(recent max={max(self._recent_real_delays) if self._recent_real_delays else None}, "
+                            f"margin={self._delay_margin}), "
                             f"prev_chunk shape: {prev_chunk_left_over.shape if prev_chunk_left_over is not None else None}"
                         )
 
@@ -207,13 +258,14 @@ class RTCActionChunkBroker(_base_policy.BasePolicy):
                     merge_ms = (time.perf_counter() - merge_start) * 1000
                     logger.info(f"RTC: Merge total time: {merge_ms:.2f}ms")
 
-                    # Update last_real_delay for next inference
+                    # Update last_real_delay and the rolling window used for
+                    # the next estimated_delay.
                     if real_delay_before_merge > 0:
-                        self._last_real_delay = real_delay_before_merge
+                        self._last_real_delay = int(real_delay_before_merge)
                     else:
                         # Only use time-based if it's reasonable (< 10 steps)
                         if inference_delay_steps <= 10:
-                            self._last_real_delay = inference_delay_steps
+                            self._last_real_delay = int(inference_delay_steps)
                         else:
                             # JIT compilation case: use default
                             self._last_real_delay = 4
@@ -222,9 +274,19 @@ class RTCActionChunkBroker(_base_policy.BasePolicy):
                                 f"(likely JIT), using default delay=4 for next inference"
                             )
 
+                    # Append to rolling max window (skip the warmup step whose
+                    # latency is JIT-inflated: inference_delay_steps was forced
+                    # to estimated_delay above, so real_delay_before_merge may
+                    # still be noisy. We keep the append to seed the window and
+                    # rely on delay_margin as the safety cushion.)
+                    if self._last_real_delay is not None:
+                        self._recent_real_delays.append(self._last_real_delay)
+
                     if self._dry_run:
                         self._inference_seq += 1
                         p95 = self._latency_tracker.p95()
+                        recent_max = max(self._recent_real_delays) if self._recent_real_delays else None
+                        next_est = (recent_max + self._delay_margin) if recent_max is not None else None
                         with self._metrics_lock:
                             self._last_inference_metrics = {
                                 "inference_seq": self._inference_seq,
@@ -236,7 +298,9 @@ class RTCActionChunkBroker(_base_policy.BasePolicy):
                                 "merge_ms": merge_ms,
                                 "queue_size_after_merge": self._action_queue.qsize(),
                                 "latency_p95_ms": (p95 or 0.0) * 1000.0,
-                                "delay_for_next_infer_steps": self._last_real_delay,
+                                "recent_max_real_delay": recent_max,
+                                "delay_margin": self._delay_margin,
+                                "delay_for_next_infer_steps": next_est,
                             }
 
                     # Signal that first inference is done (queue now has actions)
@@ -302,6 +366,7 @@ class RTCActionChunkBroker(_base_policy.BasePolicy):
         self._action_queue.clear()
         self._first_inference_done.clear()  # Reset for next episode
         self._last_real_delay = None  # Reset delay tracking
+        self._recent_real_delays.clear()
         with self._metrics_lock:
             self._last_inference_metrics = None
         self._inference_seq = 0

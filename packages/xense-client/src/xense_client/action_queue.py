@@ -101,15 +101,24 @@ class ActionQueue:
         """Get leftover original actions for RTC prev_chunk_left_over.
 
         These are the unconsumed actions from the current chunk, which will be
-        used by RTC to compute corrections for the next chunk.
+        used by RTC as the action prefix for the next chunk.
+
+        The model uses the FIRST ``inference_delay`` elements of this array as
+        the frozen prefix (see training-time-rtc paper, Algorithm 1:
+        ``prefix_mask = arange(ah) < delay``). Those first elements must be
+        the imminent actions — the ones the robot will consume during the
+        upcoming inference delay window.
 
         Args:
             fixed_length: If > 0, pad or truncate to this exact length so the
                          returned shape is always (fixed_length, action_dim).
                          This prevents JAX JIT recompilation when the leftover
                          count fluctuates by 1-2 steps between inferences.
-                         Padding repeats the last action; truncation keeps the
-                         most recent (tail) actions.
+                         Truncation keeps the HEAD (imminent) actions so that
+                         the prefix alignment is preserved. Padding appends
+                         copies of the last action at the tail, which never
+                         enter the prefix region (since fixed_length is always
+                         >= inference_delay in normal operation).
 
         Returns:
             np.ndarray | None: Remaining original actions, or None if no
@@ -124,10 +133,15 @@ class ActionQueue:
                 return left_over
 
             if len(left_over) >= fixed_length:
-                # Truncate: keep the last fixed_length actions
-                return left_over[-fixed_length:]
+                # Keep the HEAD: the first fixed_length actions are the
+                # imminent ones. The model uses left_over[0:inference_delay]
+                # as the frozen prefix, so truncating from the tail would
+                # break prefix alignment.
+                return left_over[:fixed_length]
             else:
-                # Pad: repeat the last action to fill
+                # Pad at the tail: repeat the last action to fill. The
+                # padded region is beyond the prefix window and is ignored
+                # by the model's prefix mask.
                 pad_count = fixed_length - len(left_over)
                 padding = np.repeat(left_over[-1:], pad_count, axis=0)
                 return np.concatenate([left_over, padding], axis=0)
