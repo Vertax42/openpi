@@ -1135,7 +1135,7 @@ _CONFIGS = [
             max_delay=10,
         ),
         data=LeRobotBiFlexivDataConfig(
-            repo_id="Vertax/assemble_box_with_phone_stand0410_merged",
+            repo_id="Xense/assemble_box_with_phone_stand0410_merged",
             use_delta_cartesian_actions=True,
             default_prompt="Assemble the packaging by folding the flat box into shape, placing the metal phone stand inside, and closing the box properly.",
             base_config=DataConfig(
