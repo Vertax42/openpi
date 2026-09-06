@@ -14,13 +14,14 @@ H100 A/B），并与 commit 对齐。每个阶段给出：动机 → 实现（�
 
 ## 0. 总账
 
-| 阶段 | 日期 | commit | 改动 | 端到端收益 |
-| --- | --- | --- | --- | --- |
-| 一 | 08-19 ~ 08-27 | `ec72f34` | 跳过触觉解码 / `in_order=False` / 无限 sampler | 消除周期性加载器停顿，生产 **≈1.14×** |
-| 二 | 08-27 ~ 08-28 | `9aef52d` `8ccf99c` | 共享内存 Tensor / XProf / 只在日志步算范数 / 三路相机合批 | step 时间 **−15.3%** |
-| 三 | 08-29 ~ 08-31 | `476babe`…`895811c` | cuDNN fused attention（收益 −29%，但**训练发散**） | 净收益 0，转为诊断 |
-| 四 | 09-03 ~ 09-04 | `df9755f` `3ea2b1c` | 定位根因 + fp16 内核（3000 步验收通过） | 显式 1.60 → fp16 **1.33 s/step** |
-| 五 | 09-04 | `cf07bbe` | `max_token_len` 200→128、XLA 集合通信标志 | 再 **−10.2%**，1.328 → 1.193 s/step |
+
+| 阶段 | 日期          | commit               | 改动                                                      | 端到端收益                             |
+| ---- | ------------- | -------------------- | --------------------------------------------------------- | -------------------------------------- |
+| 一   | 08-19 ~ 08-27 | `ec72f34`            | 跳过触觉解码 /`in_order=False` / 无限 sampler             | 消除周期性加载器停顿，生产**≈1.14×** |
+| 二   | 08-27 ~ 08-28 | `9aef52d` `8ccf99c`  | 共享内存 Tensor / XProf / 只在日志步算范数 / 三路相机合批 | step 时间**−15.3%**                   |
+| 三   | 08-29 ~ 08-31 | `476babe`…`895811c` | cuDNN fused attention（收益 −29%，但**训练发散**）       | 净收益 0，转为诊断                     |
+| 四   | 09-03 ~ 09-04 | `df9755f` `3ea2b1c`  | 定位根因 + fp16 内核（3000 步验收通过）                   | 显式 1.60 → fp16**1.33 s/step**       |
+| 五   | 09-04         | `cf07bbe`            | `max_token_len` 200→128、XLA 集合通信标志                | 再**−10.2%**，1.328 → 1.193 s/step   |
 
 **当前生产配置**（`configs/_examples/pi05_base_bi_flexiv_earbuds_case_insertion_teleop_rtc_0904_h100.yaml`）：
 
@@ -42,18 +43,19 @@ strict_batch_order: false     # 阶段一
 性能主线的 commit 对应关系如下。`3b2795e`、`3c5aac6` 只是夹在分支中的 Nova5 配置改动，
 与本文提速结论无关，故不纳入阶段收益。
 
-| 日期 | commit | 作用 |
-| --- | --- | --- |
-| 08-27 | `ec72f34` | 合入跳过触觉解码、乱序交付与无限 sampler；同时把 PyTorch 下限提高到支持 `in_order` 的 2.6 |
-| 08-27 | `9aef52d` | 共享内存 Tensor、零拷贝 NumPy 视图、显式关闭 DataLoader 与数据管线 profiling |
-| 08-28 | `8ccf99c` | XProf 开关、只在日志步计算范数、三路相机合批及其测试 |
-| 08-28 | `d0aec27` | 更新 H100 RTC 训练配置；没有单独的性能 A/B |
-| 08-29 | `476babe` `f42992e` | 引入 cuDNN fused attention，并记录最初的短跑/生产验证 |
-| 08-29 | `c1b70b2` `6305750` `51d9af3` | 处理全空 mask NaN；撤回逐步有限性保护；用 stop-gradient 保留快速原始 mask |
-| 08-31 | `ad08973` `c9e77cc` `895811c` | 建立 strict-order/分层诊断，定位长期发散，并第一次合并事故文档 |
-| 09-03 | `df9755f` | 增加 attention 精度与 Adam 更新空间诊断 |
-| 09-04 | `3ea2b1c` | 定位 D 项舍入机制，实现并验证 fp16 custom VJP |
-| 09-04 | `cf07bbe` | token 长度、XLA 集合通信和 remat A/B，形成 H100 最终配置 |
+
+| 日期  | commit                        | 作用                                                                                     |
+| ----- | ----------------------------- | ---------------------------------------------------------------------------------------- |
+| 08-27 | `ec72f34`                     | 合入跳过触觉解码、乱序交付与无限 sampler；同时把 PyTorch 下限提高到支持`in_order` 的 2.6 |
+| 08-27 | `9aef52d`                     | 共享内存 Tensor、零拷贝 NumPy 视图、显式关闭 DataLoader 与数据管线 profiling             |
+| 08-28 | `8ccf99c`                     | XProf 开关、只在日志步计算范数、三路相机合批及其测试                                     |
+| 08-28 | `d0aec27`                     | 更新 H100 RTC 训练配置；没有单独的性能 A/B                                               |
+| 08-29 | `476babe` `f42992e`           | 引入 cuDNN fused attention，并记录最初的短跑/生产验证                                    |
+| 08-29 | `c1b70b2` `6305750` `51d9af3` | 处理全空 mask NaN；撤回逐步有限性保护；用 stop-gradient 保留快速原始 mask                |
+| 08-31 | `ad08973` `c9e77cc` `895811c` | 建立 strict-order/分层诊断，定位长期发散，并第一次合并事故文档                           |
+| 09-03 | `df9755f`                     | 增加 attention 精度与 Adam 更新空间诊断                                                  |
+| 09-04 | `3ea2b1c`                     | 定位 D 项舍入机制，实现并验证 fp16 custom VJP                                            |
+| 09-04 | `cf07bbe`                     | token 长度、XLA 集合通信和 remat A/B，形成 H100 最终配置                                 |
 
 ---
 
@@ -104,11 +106,12 @@ buffered    = _task_info 里已完成的结果  算完了、但还轮不到它�
 
 **这两个数把「算不出来」和「算出来了但过不去」区分开——是整件事里最值钱的一步。**
 
-| batch | wait | outstanding | buffered |
-| --- | --- | --- | --- |
-| 64 | 3.02 s | 1024 | 10 |
-| 66 | 9.84 s | 1024 | **41** |
-| 130 | 9.66 s | 1024 | **41** |
+
+| batch | wait   | outstanding | buffered |
+| ----- | ------ | ----------- | -------- |
+| 64    | 3.02 s | 1024        | 10       |
+| 66    | 9.84 s | 1024        | **41**   |
+| 130   | 9.66 s | 1024        | **41**   |
 
 `outstanding` 恒为 1024（`prefetch_factor 16 × 64 workers`，管线一直是满的），停顿时 `buffered` 高达 41
 ——**41 个 batch 已经算完躺在那儿，训练循环却在等**。torch 严格按 sampler 顺序交付，任务 *j* 派给
@@ -150,12 +153,13 @@ batch 序列从来就不可恢复。
 
 受控 400 步真实训练 A/B（同机同配置，唯一变量是 B1+B2）：
 
-| 指标 | 修复前 | 修复后 | 倍数 |
-| --- | --- | --- | --- |
-| 400 步总时长 | 770.8 s | **715.7 s** | **1.08×** |
-| 停顿步数（>0.5 s） | **20** | **0** | — |
-| 最大 `next_batch` | 7.83 s | **0.43 s** | 18× |
-| 中位 `next_batch` | 0.030 s | 0.290 s | — |
+
+| 指标               | 修复前  | 修复后      | 倍数       |
+| ------------------ | ------- | ----------- | ---------- |
+| 400 步总时长       | 770.8 s | **715.7 s** | **1.08×** |
+| 停顿步数（>0.5 s） | **20**  | **0**       | —         |
+| 最大`next_batch`   | 7.83 s  | **0.43 s**  | 18×       |
+| 中位`next_batch`   | 0.030 s | 0.290 s     | —         |
 
 > 中位数从 0.030 涨到 0.290 s **不是退步**：同样的产能缺口，以前攒成每 64 步一次的 6 秒尖峰，
 > 现在均摊到每一步，总等待反而少 16.8 s。
@@ -339,10 +343,6 @@ def _stop_gradient_for_fully_masked_queries(q, attn_mask):
 提交演进要注意：`c1b70b2` 最初还加入了逐 step 的有限性检查，并采用 dummy-key mask；
 `6305750` 恢复原训练更新语义、移除这项逐步保护，`51d9af3` 再把 dummy-key 换成上面的 stop-gradient，
 这才是后续诊断和当前代码使用的实现。
-
-checkpoint 处置：原 step 16000 已被保留策略删除，step 20000–55000 全部受污染并删除，
-只能从 step 15000 重来（重跑约 1000 个有效 step）。**含 NaN 的参数或 Adam mu/nu 不能通过更换
-attention 实现恢复。**
 
 ### 3.3 第二类失效：全层 cuDNN 在约 1000 步后缓慢发散（08-30 ~ 08-31，commit `ad08973` `895811c`）
 
@@ -614,16 +614,17 @@ D 项误差在范数上只占 ~1e-3，危害来自方向的结构性（同一低
 主指标是日志 `Step 100` 到 `Step 300` 的时间戳之差除以 200（含日志开销的端到端墙钟）；
 `loss@300` 用来确认数值没变。
 
-| 变体 | s/step | 相对基线 | loss@300 | 结论 |
-| --- | --- | --- | --- | --- |
-| E0 基线 | 1.328 | — | 0.7356 | 等数据 0.03 s，数据侧不是瓶颈 |
-| E1 `max_token_len` 200→128 | 1.246 | **−6.2%** | 0.7356 | 采纳 |
-| E2 关闭 remat | OOM | — | — | XLA 试图分配 280 GiB |
-| E2b gemma remat `dots_with_no_batch_dims_saveable` | 编译失败 | — | — | cuDNN 分片器报 q/k/v 分片不一致 |
-| E2c 同上 + q/k/v 显式分片约束 | OOM | — | — | 编译过了，单块残差 84.6 GB |
-| E3 XLA 集合通信标志 | 1.281 | **−3.5%** | 0.7357 | 采纳 |
-| E4 `fsdp_devices` 8→4 | 1.335 | +0.5% | 0.7354 | 无收益 |
-| **E5 = E1 + E3** | **1.193** | **−10.2%** | 0.7356 | 生产采用；192.8 → 214.6 samples/s |
+
+| 变体                                              | s/step    | 相对基线    | loss@300 | 结论                               |
+| ------------------------------------------------- | --------- | ----------- | -------- | ---------------------------------- |
+| E0 基线                                           | 1.328     | —          | 0.7356   | 等数据 0.03 s，数据侧不是瓶颈      |
+| E1`max_token_len` 200→128                        | 1.246     | **−6.2%**  | 0.7356   | 采纳                               |
+| E2 关闭 remat                                     | OOM       | —          | —       | XLA 试图分配 280 GiB               |
+| E2b gemma remat`dots_with_no_batch_dims_saveable` | 编译失败  | —          | —       | cuDNN 分片器报 q/k/v 分片不一致    |
+| E2c 同上 + q/k/v 显式分片约束                     | OOM       | —          | —       | 编译过了，单块残差 84.6 GB         |
+| E3 XLA 集合通信标志                               | 1.281     | **−3.5%**  | 0.7357   | 采纳                               |
+| E4`fsdp_devices` 8→4                             | 1.335     | +0.5%       | 0.7354   | 无收益                             |
+| **E5 = E1 + E3**                                  | **1.193** | **−10.2%** | 0.7356   | 生产采用；192.8 → 214.6 samples/s |
 
 60000 步按稳态估算：22.1 h → 19.9 h，省约 2.2 h。
 
@@ -746,19 +747,20 @@ def _cudnn_attention_call(q, k, v, attn_mask):
 
 **诊断脚本**
 
-| 脚本 | 用途 |
-| --- | --- |
-| `scripts/check_cuda_stack.py` | 枚举 `/proc/self/maps` 里实际加载的 cuDNN/cuBLAS/NCCL，+ 真实形状数值 smoke test |
-| `scripts/token_len_scan.py` | 走真实 transform 链扫数据集的 tokenized prompt 长度分布 |
-| `scripts/attention_dterm_probe.py` | 抓真实激活 + 单层五变体误差 + H1/H2 预测（阶段四主力） |
-| `scripts/attention_dterm_cpu_analysis.py` | peaked 行的 float64 逐行解剖 |
-| `scripts/cudnn_fp16_vjp_equivalence.py` | fp16 VJP v2（直接调规则）与 v1（反向重算）的等价性 |
-| `scripts/cudnn_attention_microbench.py` | 单层 attention 前向/反向微基准 |
-| `scripts/attention_precision_update_probe.py` | 真实 Adam 状态上的更新空间对比（**注意 §4.6：该指标不区分好坏**） |
-| `scripts/grad_ab_probe.py` | 完整模型显式/cuDNN 梯度 A/B |
-| `scripts/grad_ab_direction_probe.py` | 多 batch 差分方向和随机分量 |
-| `scripts/hybrid_update_ab_probe.py` | 不同 cuDNN 层段的更新空间误差 |
-| `scripts/optimizer_update_ab_probe.py` | 从真实 Adam 状态比较参数更新误差 |
+
+| 脚本                                          | 用途                                                                            |
+| --------------------------------------------- | ------------------------------------------------------------------------------- |
+| `scripts/check_cuda_stack.py`                 | 枚举`/proc/self/maps` 里实际加载的 cuDNN/cuBLAS/NCCL，+ 真实形状数值 smoke test |
+| `scripts/token_len_scan.py`                   | 走真实 transform 链扫数据集的 tokenized prompt 长度分布                         |
+| `scripts/attention_dterm_probe.py`            | 抓真实激活 + 单层五变体误差 + H1/H2 预测（阶段四主力）                          |
+| `scripts/attention_dterm_cpu_analysis.py`     | peaked 行的 float64 逐行解剖                                                    |
+| `scripts/cudnn_fp16_vjp_equivalence.py`       | fp16 VJP v2（直接调规则）与 v1（反向重算）的等价性                              |
+| `scripts/cudnn_attention_microbench.py`       | 单层 attention 前向/反向微基准                                                  |
+| `scripts/attention_precision_update_probe.py` | 真实 Adam 状态上的更新空间对比（**注意 §4.6：该指标不区分好坏**）              |
+| `scripts/grad_ab_probe.py`                    | 完整模型显式/cuDNN 梯度 A/B                                                     |
+| `scripts/grad_ab_direction_probe.py`          | 多 batch 差分方向和随机分量                                                     |
+| `scripts/hybrid_update_ab_probe.py`           | 不同 cuDNN 层段的更新空间误差                                                   |
+| `scripts/optimizer_update_ab_probe.py`        | 从真实 Adam 状态比较参数更新误差                                                |
 
 **诊断配置**：`configs/diag_cudnn_strict_order.yaml`（全层 bf16，会发散）、
 `configs/diag_explicit_strict_order.yaml`（基线）、`configs/diag_cudnn_last3.yaml`（后 3 层折中）、
@@ -766,14 +768,15 @@ def _cudnn_attention_call(q, k, v, attn_mask):
 
 **代码位置**
 
-| 文件 | 相关改动 |
-| --- | --- |
-| `src/openpi/training/data_loader.py` | `SelectiveVideoLeRobotDataset`、`_resolve_decode_video_keys`、`InfiniteSampler`、`in_order` 接线、Torch Tensor collate、`close()` |
-| `src/openpi/training/config.py` | `DataConfig.tactile`、`TrainConfig.strict_batch_order` |
-| `src/openpi/models/pi0_config.py` | `batch_image_views`、`use_cudnn_attention`、`cudnn_attention_{layer_start,num_layers,dtype}`、`gemma_remat_policy`、`siglip_remat_policy` |
-| `src/openpi/models/pi0.py` | `_encode_image_views_as_batch` |
-| `src/openpi/models/gemma.py` | `_stop_gradient_for_fully_masked_queries`、`_cudnn_attention_call`、`_cudnn_attention_in_dtype`、`_cudnn_static_args`、逐层 cuDNN 开关 |
-| `scripts/train.py` | `compute_metrics` 静态分支、XProf trace 开关、数据管线 profiling |
+
+| 文件                                 | 相关改动                                                                                                                                  |
+| ------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/openpi/training/data_loader.py` | `SelectiveVideoLeRobotDataset`、`_resolve_decode_video_keys`、`InfiniteSampler`、`in_order` 接线、Torch Tensor collate、`close()`         |
+| `src/openpi/training/config.py`      | `DataConfig.tactile`、`TrainConfig.strict_batch_order`                                                                                    |
+| `src/openpi/models/pi0_config.py`    | `batch_image_views`、`use_cudnn_attention`、`cudnn_attention_{layer_start,num_layers,dtype}`、`gemma_remat_policy`、`siglip_remat_policy` |
+| `src/openpi/models/pi0.py`           | `_encode_image_views_as_batch`                                                                                                            |
+| `src/openpi/models/gemma.py`         | `_stop_gradient_for_fully_masked_queries`、`_cudnn_attention_call`、`_cudnn_attention_in_dtype`、`_cudnn_static_args`、逐层 cuDNN 开关    |
+| `scripts/train.py`                   | `compute_metrics` 静态分支、XProf trace 开关、数据管线 profiling                                                                          |
 
 ---
 
