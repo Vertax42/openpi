@@ -1,5 +1,4 @@
 from collections.abc import Iterator, Sequence
-import functools
 import logging
 import multiprocessing
 import os
@@ -90,27 +89,8 @@ class DataLoader(Protocol[T_co]):
     def __iter__(self) -> Iterator[T_co]:
         raise NotImplementedError("Subclasses of DataLoader should implement __iter__.")
 
-    def profile_stats(self) -> dict[str, float] | None:
-        """Return timings for the most recently yielded batch, when profiling is enabled."""
-        return None
-
     def close(self) -> None:
         """Release worker processes and other loader resources."""
-
-
-class _TimedDataset:
-    """Attach worker-side __getitem__ latency to samples for profiling."""
-
-    def __init__(self, dataset: Dataset):
-        self._dataset = dataset
-
-    def __getitem__(self, index: SupportsIndex):
-        started = time.monotonic()
-        sample = self._dataset[index]
-        return sample, time.monotonic() - started
-
-    def __len__(self) -> int:
-        return len(self._dataset)
 
 
 class TransformedDataset(Dataset[T_co]):
@@ -408,7 +388,6 @@ def create_data_loader(
         skip_norm_stats=skip_norm_stats,
         framework=framework,
         strict_batch_order=config.strict_batch_order,
-        profile_data_pipeline=config.profile_data_pipeline,
     )
 
 
@@ -426,7 +405,6 @@ def create_torch_data_loader(
     seed: int = 0,
     framework: str = "jax",
     strict_batch_order: bool = False,
-    profile_data_pipeline: bool = False,
 ) -> DataLoader[tuple[_model.Observation, _model.Actions]]:
     """Create a data loader for training.
 
@@ -479,7 +457,6 @@ def create_torch_data_loader(
         seed=seed,
         framework=framework,
         strict_batch_order=strict_batch_order,
-        profile_data_pipeline=profile_data_pipeline,
     )
 
     return DataLoaderImpl(data_config, data_loader)
@@ -577,7 +554,6 @@ class TorchDataLoader:
         seed: int = 0,
         framework: str = "jax",
         strict_batch_order: bool = False,
-        profile_data_pipeline: bool = False,
     ):
         """Create a PyTorch data loader.
 
@@ -599,9 +575,6 @@ class TorchDataLoader:
         if jax.process_count() > 1:
             raise NotImplementedError("Data loading with multiple processes is not supported.")
 
-        if profile_data_pipeline:
-            dataset = _TimedDataset(dataset)
-
         if len(dataset) < local_batch_size:
             raise ValueError(f"Local batch size ({local_batch_size}) is larger than the dataset size ({len(dataset)}).")
 
@@ -614,8 +587,6 @@ class TorchDataLoader:
                 jax.sharding.PartitionSpec("B"),
             )
         self._num_batches = num_batches
-        self._profile_data_pipeline = profile_data_pipeline
-        self._last_profile_stats: dict[str, float] | None = None
         self._active_iterator = None
 
         mp_context = None
@@ -640,7 +611,7 @@ class TorchDataLoader:
             prefetch_factor=16
             if num_workers > 0
             else None,  # stall-fix: 32 over-buffered for cold start, 4 was too low vs slow workers, 16 is the sweet spot
-            collate_fn=functools.partial(_collate_fn, profile=profile_data_pipeline),
+            collate_fn=_collate_fn,
             worker_init_fn=_worker_init_fn,
             drop_last=True,
             # Hand batches over as workers finish them. In strict order, the one worker that is
@@ -674,14 +645,10 @@ class TorchDataLoader:
                     except StopIteration:
                         break  # We've exhausted the dataset. Create a new iterator and start over.
                     dt = time.monotonic() - t_batch
-                    worker_stats: dict[str, float] = {}
-                    if self._profile_data_pipeline:
-                        batch, worker_stats = batch
                     if num_items < 3 or dt > 3.0:
                         logging.info(f"[TorchDataLoader] batch #{num_items} next() took {dt:.2f}s")
                     num_items += 1
                     # For JAX, convert to sharded arrays; for PyTorch, return torch tensors
-                    t_array = time.monotonic()
                     if self._sharding is not None:
                         batch = jax.tree.map(
                             lambda x: jax.make_array_from_process_local_data(self._sharding, _to_numpy_view(x)),
@@ -689,27 +656,9 @@ class TorchDataLoader:
                         )
                     else:
                         batch = jax.tree.map(torch.as_tensor, batch)
-                    array_construct_s = time.monotonic() - t_array
-
-                    h2d_wait_s = 0.0
-                    if self._profile_data_pipeline and self._sharding is not None:
-                        t_h2d = time.monotonic()
-                        jax.block_until_ready(batch)
-                        h2d_wait_s = time.monotonic() - t_h2d
-
-                    if self._profile_data_pipeline:
-                        self._last_profile_stats = {
-                            "main_queue_wait_s": dt,
-                            **worker_stats,
-                            "jax_array_construct_s": array_construct_s,
-                            "h2d_wait_s": h2d_wait_s,
-                        }
                     yield batch
         finally:
             self.close()
-
-    def profile_stats(self) -> dict[str, float] | None:
-        return self._last_profile_stats
 
     def close(self) -> None:
         """Shut down the active multiprocessing iterator before interpreter teardown."""
@@ -745,27 +694,15 @@ def _to_numpy_view(value):
     return np.asarray(value)
 
 
-def _collate_fn(items, *, profile: bool = False):
+def _collate_fn(items):
     """Collate batch elements into CPU tensors so workers use shared-memory IPC."""
-    getitem_s = 0.0
-    if profile:
-        samples, durations = zip(*items, strict=True)
-        items = samples
-        getitem_s = sum(durations)
-    started = time.monotonic()
     # Some inputs are JAX arrays, so stack through NumPy first. Returning Torch tensors is
     # important here: the DataLoader multiprocessing reducer transfers their storage through
     # shared memory instead of pickling each ~900 MiB NumPy batch into the result queue.
-    batch = jax.tree.map(
+    return jax.tree.map(
         lambda *xs: torch.from_numpy(np.stack([np.asarray(x) for x in xs], axis=0)),
         *items,
     )
-    if not profile:
-        return batch
-    return batch, {
-        "worker_getitem_s": getitem_s,
-        "worker_collate_s": time.monotonic() - started,
-    }
 
 
 def _worker_init_fn(worker_id: int) -> None:
@@ -847,10 +784,6 @@ class DataLoaderImpl(DataLoader):
     def __iter__(self):
         for batch in self._data_loader:
             yield _model.Observation.from_dict(batch), batch["actions"]
-
-    def profile_stats(self) -> dict[str, float] | None:
-        profile_stats = getattr(self._data_loader, "profile_stats", None)
-        return profile_stats() if profile_stats is not None else None
 
     def close(self) -> None:
         close = getattr(self._data_loader, "close", None)

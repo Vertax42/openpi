@@ -57,12 +57,12 @@ def report(name, pattern):
 
 def main():
     import jax
+    from jax._src.lib import cuda_versions
     import jax.numpy as jnp
     import numpy as np
     import torch
     import torchcodec
     import torchvision
-    from jax._src.lib import cuda_versions
 
     section("1. reported versions")
     rt, build = cuda_versions.cudnn_get_version(), cuda_versions.cudnn_build_version()
@@ -125,36 +125,36 @@ def main():
     section("3. production attention shape: forward + backward vs fp32 reference")
     # pi0.5 training shape: 3x256 image + 200 prompt + 50 action tokens, GQA 8:1,
     # head_dim 256, bf16, real block mask including fully-masked padding rows.
-    B, NH, NKV, HD = 2, 8, 1, 256
-    T = 768 + 200 + 50
+    batch_size, num_heads, num_kv_heads, head_dim = 2, 8, 1, 256
+    seq_len = 768 + 200 + 50
 
-    im = np.ones((B, T), dtype=bool)
+    im = np.ones((batch_size, seq_len), dtype=bool)
     for b, plen in enumerate((120, 165)):
         im[b, 768 + plen : 768 + 200] = False
-    ar = np.zeros((T,), dtype=bool)
+    ar = np.zeros((seq_len,), dtype=bool)
     ar[768 + 200] = True
     im_j = jnp.asarray(im)
     cs = jnp.broadcast_to(jnp.cumsum(jnp.asarray(ar), -1), im_j.shape)
     mask = jnp.logical_and(cs[:, None, :] <= cs[:, :, None], im_j[:, None, :] * im_j[:, :, None])[:, None]
     valid = np.asarray(jnp.any(mask, -1))[0, 0]
     n_empty = int((~np.asarray(jnp.any(mask, -1))).sum())
-    print(f"  shape B={B} T={T} heads={NH} kv={NKV} head_dim={HD} bf16")
+    print(f"  shape batch_size={batch_size} seq_len={seq_len} heads={num_heads} kv={num_kv_heads} head_dim={head_dim} bf16")
     print(f"  fully-masked query rows in batch: {n_empty}")
 
     rng = np.random.default_rng(0)
-    q = jnp.asarray(rng.normal(0, 10 / np.sqrt(HD), (B, T, NH, HD)), jnp.bfloat16)
-    k = jnp.asarray(rng.normal(0, 1, (B, T, NKV, HD)), jnp.bfloat16)
-    v = jnp.asarray(rng.normal(0, 1, (B, T, NKV, HD)), jnp.bfloat16)
-    cot = np.asarray(rng.normal(0, 1, (B, T, NH, HD)), np.float32)
-    cot[:, : T - 50] = 0.0  # only action tokens carry loss, as in Pi0
+    q = jnp.asarray(rng.normal(0, 10 / np.sqrt(head_dim), (batch_size, seq_len, num_heads, head_dim)), jnp.bfloat16)
+    k = jnp.asarray(rng.normal(0, 1, (batch_size, seq_len, num_kv_heads, head_dim)), jnp.bfloat16)
+    v = jnp.asarray(rng.normal(0, 1, (batch_size, seq_len, num_kv_heads, head_dim)), jnp.bfloat16)
+    cot = np.asarray(rng.normal(0, 1, (batch_size, seq_len, num_heads, head_dim)), np.float32)
+    cot[:, : seq_len - 50] = 0.0  # only action tokens carry loss, as in Pi0
     cot = jnp.asarray(cot)
 
     def reference(q, k, v, m):  # explicit path, fp32 throughout
         q, k, v = (x.astype(jnp.float32) for x in (q, k, v))
-        gq = q.reshape(B, T, NKV, NH // NKV, HD)
+        gq = q.reshape(batch_size, seq_len, num_kv_heads, num_heads // num_kv_heads, head_dim)
         lg = jnp.einsum("BTKGH,BSKH->BKGTS", gq, k, preferred_element_type=jnp.float32)
         lg = jnp.where(m[:, :, None], lg, -2.3819763e38)
-        return jnp.einsum("BKGTS,BSKH->BTKGH", jax.nn.softmax(lg, -1), v).reshape(B, T, NH, HD)
+        return jnp.einsum("BKGTS,BSKH->BTKGH", jax.nn.softmax(lg, -1), v).reshape(batch_size, seq_len, num_heads, head_dim)
 
     def cudnn(q, k, v, m):  # what training runs with use_cudnn_attention=true
         has_key = jnp.any(m, -1)[:, 0, :, None, None]
@@ -167,7 +167,7 @@ def main():
     try:
         gr = [np.asarray(x.astype(jnp.float32), np.float64) for x in jax.grad(loss(reference), (0, 1, 2))(q, k, v, mask)]
         gc = [np.asarray(x.astype(jnp.float32), np.float64) for x in jax.grad(loss(cudnn), (0, 1, 2))(q, k, v, mask)]
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         FAIL.append(f"cuDNN attention raised {type(exc).__name__}: {exc}")
         print(f"  !! cuDNN attention FAILED: {type(exc).__name__}: {str(exc)[:300]}")
         gr = gc = None

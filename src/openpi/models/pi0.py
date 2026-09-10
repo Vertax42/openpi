@@ -95,11 +95,7 @@ class Pi0(_model.BaseModel):
                 embed_dtype=config.dtype,
                 adarms=config.pi05,
                 use_cudnn_attention=config.use_cudnn_attention,
-                cudnn_attention_layer_start=config.cudnn_attention_layer_start,
-                cudnn_attention_num_layers=config.cudnn_attention_num_layers,
                 cudnn_attention_dtype=config.cudnn_attention_dtype,
-                explicit_attention_fp32=config.explicit_attention_fp32,
-                remat_policy=config.gemma_remat_policy,
             )
         )
         llm.lazy_init(
@@ -113,7 +109,6 @@ class Pi0(_model.BaseModel):
                 variant="So400m/14",
                 pool_type="none",
                 scan=True,
-                remat_policy=config.siglip_remat_policy,
                 dtype_mm=config.dtype,
             )
         )

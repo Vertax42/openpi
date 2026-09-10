@@ -100,32 +100,6 @@ def test_torch_data_loader_close_shuts_down_workers():
     assert all(not worker.is_alive() for worker in workers)
 
 
-def test_torch_data_loader_profile_stats():
-    config = pi0_config.Pi0Config(action_dim=24, action_horizon=50, max_token_len=48)
-    batch_size = jax.device_count()
-    dataset = _data_loader.FakeDataset(config, batch_size * 2)
-
-    loader = _data_loader.TorchDataLoader(
-        dataset,
-        local_batch_size=batch_size,
-        num_batches=1,
-        num_workers=2,
-        profile_data_pipeline=True,
-    )
-    _ = next(iter(loader))
-    stats = loader.profile_stats()
-
-    assert stats is not None
-    assert set(stats) == {
-        "main_queue_wait_s",
-        "worker_getitem_s",
-        "worker_collate_s",
-        "jax_array_construct_s",
-        "h2d_wait_s",
-    }
-    assert all(value >= 0 for value in stats.values())
-
-
 def test_with_fake_dataset():
     config = _config.get_config("debug_pi05")
 

@@ -36,24 +36,9 @@ class Pi0Config(_model.BaseModelConfig):
     # Use cuDNN fused attention for training-time Gemma attention. This requires
     # a cuDNN runtime that supports the model's BF16 GQA shapes and attention mask.
     use_cudnn_attention: bool = False
-    # Diagnostic hybrid mode. None keeps the historical all-layer behavior;
-    # otherwise only this contiguous layer range uses cuDNN.
-    cudnn_attention_layer_start: int = 0
-    cudnn_attention_num_layers: int | None = None
     # Compute dtype for the cuDNN kernel: "bfloat16" or "float16". float16 uses a
     # dynamically loss-scaled custom VJP (see gemma._cudnn_attention_in_dtype).
     cudnn_attention_dtype: str = "bfloat16"
-    # Diagnostic only: explicit attention with fp32 q/k/v/probs as a numerical reference.
-    explicit_attention_fp32: bool = False
-    # Activation rematerialization policy for the Gemma transformer blocks and the SigLIP
-    # encoder blocks. "nothing_saveable" (default) recomputes every block in the backward
-    # pass; "none" disables remat entirely (fastest, most memory); any other name is looked
-    # up in jax.checkpoint_policies (e.g. "dots_with_no_batch_dims_saveable").
-    # NOTE: on 8xH100 80GB with global batch 256 neither "none" (XLA wants a 280 GiB buffer)
-    # nor "dots_with_no_batch_dims_saveable" (84.6 GB) fits; see docs/training-optimization.md.
-    gemma_remat_policy: str = "nothing_saveable"
-    siglip_remat_policy: str = "nothing_saveable"
-
     # training-time RTC config
     enable_training_time_rtc: bool = False
     max_delay: int = 10  # steps 330ms @ 30fps
@@ -63,10 +48,6 @@ class Pi0Config(_model.BaseModelConfig):
             object.__setattr__(self, "max_token_len", 200 if self.pi05 else 48)
         if self.discrete_state_input is None:
             object.__setattr__(self, "discrete_state_input", self.pi05)
-        if self.cudnn_attention_layer_start < 0:
-            raise ValueError("cudnn_attention_layer_start must be non-negative")
-        if self.cudnn_attention_num_layers is not None and self.cudnn_attention_num_layers < 0:
-            raise ValueError("cudnn_attention_num_layers must be non-negative or None")
         if self.cudnn_attention_dtype not in ("bfloat16", "float16"):
             raise ValueError("cudnn_attention_dtype must be 'bfloat16' or 'float16'")
 

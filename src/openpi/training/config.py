@@ -644,10 +644,6 @@ class TrainConfig:
     optimizer: _optimizer.OptimizerConfig = dataclasses.field(default_factory=_optimizer.AdamW)
     ema_decay: float | None = 0.99
 
-    # Diagnostic-only relative L2 perturbation applied to gradients before the
-    # optimizer update. Zero preserves the normal training path exactly.
-    gradient_noise_scale: float = 0.0
-
     # Specifies which weights should be frozen.
     freeze_filter: tyro.conf.Suppress[Filter] = dataclasses.field(default_factory=nnx.Nothing)
 
@@ -673,17 +669,6 @@ class TrainConfig:
     # workers finish them. The sampler still visits every index exactly once per pass, so this
     # only reorders batches that were already randomly shuffled.
     strict_batch_order: bool = False
-    # If true, collect fine-grained data-pipeline timings. This adds per-sample clocks in
-    # workers and synchronizes device transfers, so it is intended only for short profiling
-    # runs rather than production training.
-    profile_data_pipeline: bool = False
-    # Number of steps between fine-grained data-pipeline timing lines.
-    profile_log_interval: int = 1
-    # If set, write a JAX/XProf trace to this directory. The trace begins at
-    # xprof_start_step and covers xprof_num_steps complete training iterations.
-    xprof_trace_dir: str | None = None
-    xprof_start_step: int = 0
-    xprof_num_steps: int = 20
     # Number of train steps (batches) to run.
     num_train_steps: int = 30_000
 
@@ -691,9 +676,6 @@ class TrainConfig:
     log_interval: int = 100
     # How often (in steps) to save checkpoints.
     save_interval: int = 1000
-    # Whether to save the last step even when it is not on save_interval. Useful to disable
-    # for short profiling runs restored from an existing checkpoint.
-    save_final_checkpoint: bool = True
     # If set, any existing checkpoints matching step % keep_period == 0 will not be deleted.
     keep_period: int | None = 5000
 
@@ -734,8 +716,6 @@ class TrainConfig:
     def __post_init__(self) -> None:
         if self.resume and self.overwrite:
             raise ValueError("Cannot resume and overwrite at the same time.")
-        if self.xprof_num_steps <= 0:
-            raise ValueError("xprof_num_steps must be positive.")
 
 
 # YAML lookup paths, in priority order. First match wins.

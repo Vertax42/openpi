@@ -1,7 +1,7 @@
 # Production launch (8xH100, hb-openpi env). XLA_FLAGS must be set before Python/JAX
 # starts and therefore cannot be injected by a TrainConfig YAML. The flags below measured
 # -3.5% step time on 2026-09-04 (FSDP collective combining + pipelined collectives); see
-# docs/training-optimization.md for the complete A/B table and numerical validation.
+# docs/training-optimization.md for the performance results and numerical validation.
 #   env -u LD_LIBRARY_PATH python scripts/check_cuda_stack.py
 #   env -u LD_LIBRARY_PATH \
 #   XLA_FLAGS="--xla_gpu_enable_latency_hiding_scheduler=true \
@@ -17,7 +17,7 @@
 model:
   type: Pi0Config
   # Scanned 2026-09-04 over this dataset (4037 states incl. per-dim extremes) with
-  # scripts/token_len_scan.py: the longest tokenized "Task: ..., State: ...;\nAction: " prompt
+  # The longest tokenized "Task: ..., State: ...;\nAction: " prompt
   # is 116 tokens, so 128 leaves 12 spare. Down from 200: -6.2% step time, identical loss
   # (padding tokens were masked anyway). Re-scan when the dataset or prompt changes.
   max_token_len: 128
@@ -26,17 +26,9 @@ model:
   enable_training_time_rtc: true
   # Encode all three visual views in one SigLIP call.
   batch_image_views: true
-  # Run all 18 Gemma layers through the validated FP16 cuDNN custom VJP. Leaving
-  # cudnn_attention_num_layers null means there is no partial-layer restriction.
+  # Run all 18 Gemma layers through the validated FP16 cuDNN custom VJP.
   use_cudnn_attention: true
-  cudnn_attention_layer_start: 0
-  cudnn_attention_num_layers: null
   cudnn_attention_dtype: float16
-  # On 8xH100 80GB / global batch 256, weaker remat policies require either a
-  # 280 GiB allocation or an 84.6 GB residual. Full recomputation is the fastest
-  # policy that actually fits this shape.
-  gemma_remat_policy: nothing_saveable
-  siglip_remat_policy: nothing_saveable
 weight_loader:
   type: CheckpointWeightLoader
   params_path: gs://openpi-assets/checkpoints/pi05_base/params
@@ -53,9 +45,6 @@ num_workers: 64
 num_train_steps: 80000
 # Whole-model grad/parameter norms are computed only on these logging steps.
 log_interval: 100
-# Fine-grained pipeline profiling adds timers and device synchronization; keep it off
-# for production now that shared-memory Tensor IPC is the default loader path.
-profile_data_pipeline: false
 save_interval: 10000
 keep_period: 10000
 fsdp_devices: 8

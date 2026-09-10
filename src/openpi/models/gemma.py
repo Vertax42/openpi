@@ -211,7 +211,7 @@ def _cudnn_attention_in_dtype(q, k, v, attn_mask, compute_dtype):
     rescaled to a power of two near 1 (dynamic loss scaling) before the fused
     backward and unscaled in float32 afterwards. Forward values are unchanged up
     to the output rounding; q/k/v are exactly representable in float16 unless
-    they exceed its range, which the probe script checks.
+    they exceed its range. Validate activation ranges when changing the model or data.
     """
     out_dtype = q.dtype
 
@@ -292,11 +292,9 @@ class Attention(nn.Module):
     # Compute dtype handed to the cuDNN kernel: "bfloat16" (historical) or "float16"
     # (see _cudnn_attention_in_dtype). Ignored by the explicit path.
     cudnn_attention_dtype: str = "bfloat16"
-    # Diagnostic only: run the explicit path with fp32 q/k/v/probs as a reference.
-    explicit_attention_fp32: bool = False
 
     @nn.compact
-    def __call__(self, xs, positions, attn_mask, kv_cache, use_cudnn_attention=None):
+    def __call__(self, xs, positions, attn_mask, kv_cache):
         # all experts must share the same head dim, num heads, and num kv heads for self-attention to work
         assert all(config.head_dim == self.configs[0].head_dim for config in self.configs)
         assert all(config.num_heads == self.configs[0].num_heads for config in self.configs)
@@ -367,8 +365,6 @@ class Attention(nn.Module):
 
         def explicit_attention(operands):
             q, k, v, mask = operands
-            if self.explicit_attention_fp32:
-                q, k, v = (x.astype(jnp.float32) for x in (q, k, v))
             grouped_q = einops.rearrange(q, "B T (K G) H -> B T K G H", K=self.configs[0].num_kv_heads)
             logits = jnp.einsum("BTKGH,BSKH->BKGTS", grouped_q, k, preferred_element_type=jnp.float32)
 
@@ -381,15 +377,11 @@ class Attention(nn.Module):
             encoded = jnp.einsum("BKGTS,BSKH->BTKGH", probs, v).astype(dtype)
             return einops.rearrange(encoded, "B T K G H -> B T (K G) H")
 
-        if use_cudnn_attention is None:
-            use_cudnn_attention = self.use_cudnn_attention
         operands = (q, k, v, attn_mask)
-        if kv_cache is not None:
-            encoded = explicit_attention(operands)
-        elif isinstance(use_cudnn_attention, bool):
-            encoded = cudnn_attention(operands) if use_cudnn_attention else explicit_attention(operands)
+        if self.use_cudnn_attention and kv_cache is None:
+            encoded = cudnn_attention(operands)
         else:
-            encoded = jax.lax.cond(use_cudnn_attention, cudnn_attention, explicit_attention, operands)
+            encoded = explicit_attention(operands)
 
         out = []
         start = 0
@@ -447,16 +439,13 @@ class Block(nn.Module):
 
     configs: tuple[Config, ...]
     use_cudnn_attention: bool = False
-    cudnn_attention_layer_start: int = 0
-    cudnn_attention_num_layers: int | None = None
     cudnn_attention_dtype: str = "bfloat16"
-    explicit_attention_fp32: bool = False
 
     dropout: float = 0.0
     dropout_bdims: tuple[int, ...] = ()
 
     @nn.compact
-    def __call__(self, xs, kv_cache, positions, attn_mask, adarms_cond, layer_index=None, deterministic=True):
+    def __call__(self, xs, kv_cache, positions, attn_mask, adarms_cond, deterministic=True):
         xs = sharding.activation_sharding_constraint(xs)
         drop = nn.Dropout(self.dropout, self.dropout_bdims) if self.dropout else lambda x, _: x
 
@@ -464,16 +453,8 @@ class Block(nn.Module):
             configs=self.configs,
             use_cudnn_attention=self.use_cudnn_attention,
             cudnn_attention_dtype=self.cudnn_attention_dtype,
-            explicit_attention_fp32=self.explicit_attention_fp32,
             name="attn",
         )
-        layer_uses_cudnn = self.use_cudnn_attention
-        if layer_uses_cudnn and self.cudnn_attention_num_layers is not None:
-            layer_uses_cudnn = jnp.logical_and(
-                layer_index >= self.cudnn_attention_layer_start,
-                layer_index < self.cudnn_attention_layer_start + self.cudnn_attention_num_layers,
-            )
-
         pre_attn = []
         gates = []
         for i, x in enumerate(xs):
@@ -485,7 +466,7 @@ class Block(nn.Module):
             pre_attn.append(x)
 
         pre_attn = sharding.activation_sharding_constraint(pre_attn)
-        post_attn, kv_cache = attn(pre_attn, positions, attn_mask, kv_cache, use_cudnn_attention=layer_uses_cudnn)
+        post_attn, kv_cache = attn(pre_attn, positions, attn_mask, kv_cache)
         post_attn = jax.tree.map(lambda x: drop(x, deterministic), post_attn)
         post_attn = sharding.activation_sharding_constraint(post_attn)
         xs = [_gated_residual(x, y, gate) for x, y, gate in zip(xs, post_attn, gates, strict=True)]
@@ -529,11 +510,7 @@ class Module(nn.Module):
     dropout_bdims: tuple[int, ...] = ()  # Every float is dropped independently.
     adarms: bool = False
     use_cudnn_attention: bool = False
-    cudnn_attention_layer_start: int = 0
-    cudnn_attention_num_layers: int | None = None
     cudnn_attention_dtype: str = "bfloat16"
-    explicit_attention_fp32: bool = False
-    remat_policy: str = "nothing_saveable"
 
     def setup(self):
         # all experts must have the same depth
@@ -544,15 +521,12 @@ class Module(nn.Module):
             embed_dim=self.configs[0].width,  # embedder for first expert only
             name="embedder",
         )
-        if self.remat_policy == "none":
-            block_cls = Block
-        else:
-            block_cls = nn.remat(
-                Block,
-                prevent_cse=False,
-                static_argnums=(6,),  # 0=self, 7=deterministic
-                policy=getattr(jax.checkpoint_policies, self.remat_policy),
-            )
+        block_cls = nn.remat(
+            Block,
+            prevent_cse=False,
+            static_argnums=(5,),  # 0=self, 6=deterministic
+            policy=jax.checkpoint_policies.nothing_saveable,
+        )
         self.layers = nn.scan(
             block_cls,
             variable_axes={"params": 0},
@@ -562,17 +536,13 @@ class Module(nn.Module):
                 nn.broadcast,
                 nn.broadcast,
                 nn.broadcast,
-                0,
                 nn.broadcast,
-            ),  # 0=kv_cache, 1=positions, 2=mask, 3=adarms_cond, 4=layer_index, 5=deterministic
+            ),  # 0=kv_cache, 1=positions, 2=mask, 3=adarms_cond, 4=deterministic
             length=self.configs[0].depth,
         )(
             configs=self.configs,
             use_cudnn_attention=self.use_cudnn_attention,
-            cudnn_attention_layer_start=self.cudnn_attention_layer_start,
-            cudnn_attention_num_layers=self.cudnn_attention_num_layers,
             cudnn_attention_dtype=self.cudnn_attention_dtype,
-            explicit_attention_fp32=self.explicit_attention_fp32,
             dropout=self.dropout,
             dropout_bdims=self.dropout_bdims,
         )
@@ -599,8 +569,7 @@ class Module(nn.Module):
         if adarms_cond is None:
             adarms_cond = [None] * len(self.configs)
 
-        layer_indices = jnp.arange(self.configs[0].depth, dtype=jnp.int32)
-        embedded, kv_cache = self.layers(embedded, kv_cache, positions, mask, adarms_cond, layer_indices, deterministic)
+        embedded, kv_cache = self.layers(embedded, kv_cache, positions, mask, adarms_cond, deterministic)
 
         assert all(e.dtype == jnp.dtype(self.embed_dtype) for e in embedded if e is not None)
 

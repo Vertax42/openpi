@@ -21,7 +21,6 @@ import numpy as np
 
 from openpi import transforms
 
-
 TCP = slice(0, 9)
 GRIPPER = slice(9, 10)
 STATE_DIM = 10

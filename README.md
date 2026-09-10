@@ -188,8 +188,8 @@ model:
   paligemma_variant: gemma_2b
   action_expert_variant: gemma_300m
   enable_training_time_rtc: true
-  # Experimental and currently unsafe for production; keep disabled until the
-  # step-0 2000-step convergence gate documented below has passed.
+  # Explicit attention is the default. For validated FP16 cuDNN training,
+  # see the configuration and validation notes below.
   use_cudnn_attention: false
   max_delay: 10
 
