@@ -661,7 +661,13 @@ class TorchDataLoader:
             self.close()
 
     def close(self) -> None:
-        """Shut down the active multiprocessing iterator before interpreter teardown."""
+        """Shut down the active multiprocessing iterator before interpreter teardown.
+
+        `_shutdown_workers`, `_workers` and `_iterator` are torch internals with no public
+        equivalent, so this is tied to the `torch>=2.11,<2.12` pin in pyproject.toml. Every
+        access is getattr-guarded: on a torch that renamed them the loader degrades to the
+        old behaviour (workers reaped by `__del__`) rather than raising.
+        """
         data_iter = self._active_iterator
         if data_iter is None:
             return
