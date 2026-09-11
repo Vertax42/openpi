@@ -16,8 +16,8 @@
 #     --exp-name=<experiment-name>
 model:
   type: Pi0Config
-  # Scanned 2026-09-04 over this dataset (4037 states incl. per-dim extremes) with
-  # The longest tokenized "Task: ..., State: ...;\nAction: " prompt
+  # Scanned 2026-09-04 over this dataset (4037 states incl. per-dim extremes): the longest
+  # tokenized "Task: ..., State: ...;\nAction: " prompt
   # is 116 tokens, so 128 leaves 12 spare. Down from 200: -6.2% step time, identical loss
   # (padding tokens were masked anyway). Re-scan when the dataset or prompt changes.
   max_token_len: 128

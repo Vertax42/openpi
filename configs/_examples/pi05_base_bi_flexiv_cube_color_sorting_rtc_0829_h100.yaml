@@ -12,14 +12,15 @@
 #     --xla_gpu_enable_pipelined_reduce_scatter=true \
 #     --xla_gpu_enable_while_loop_double_buffering=true" \
 #   XLA_PYTHON_CLIENT_MEM_FRACTION=0.9 \
-#   python scripts/train.py pi05_base_bi_flexiv_earbuds_case_insertion_teleop_rtc_0904_h100 \
+#   python scripts/train.py pi05_base_bi_flexiv_cube_color_sorting_rtc_0829_h100 \
 #     --exp-name=<experiment-name>
 model:
   type: Pi0Config
-  # Scanned 2026-09-04 over this dataset (4037 states incl. per-dim extremes) with
-  # The longest tokenized "Task: ..., State: ...;\nAction: " prompt
-  # is 116 tokens, so 128 leaves 12 spare. Down from 200: -6.2% step time, identical loss
-  # (padding tokens were masked anyway). Re-scan when the dataset or prompt changes.
+  # ⚠️ Carried over from the earbuds config, where 128 was measured against that dataset's
+  # prompts (longest tokenized prompt 116 tokens). It has NOT been re-scanned against
+  # cube-color-sorting-0821, whose prompt and state layout differ. Scan the full transform
+  # chain before trusting it here -- the tokenizer only warns and truncates on overflow --
+  # or put 200 back. See docs/training-optimization.md.
   max_token_len: 128
   pi05: true
   discrete_state_input: true
