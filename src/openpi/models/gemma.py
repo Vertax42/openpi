@@ -27,17 +27,12 @@ We follow this einsum axis naming convention:
 
 from collections.abc import Sequence
 import dataclasses
+import functools
 from typing import Literal, TypeAlias
 
 import einops
 import flax.linen as nn
 import jax
-
-# Private JAX API (pinned jax 0.5.3): the cuDNN fused-attention fwd/bwd rules that
-# jax.nn.dot_product_attention(implementation="cudnn") wires into its custom_vjp.
-# Used by _cudnn_attention_in_dtype to run the float16 kernel with loss scaling
-# without recomputing the forward inside the backward.
-from jax._src.cudnn import fused_attention_stablehlo as _cudnn_fa
 import jax.numpy as jnp
 
 import openpi.models.lora as lora
@@ -166,6 +161,56 @@ class Embedder(nn.Module):
         return jnp.dot(x, self.input_embedding_table.T)
 
 
+# The private symbols _cudnn_attention_in_dtype and _cudnn_static_args call directly.
+_CUDNN_FA_REQUIRED = (
+    "_dot_product_attention_fwd_rule",
+    "_dot_product_attention_bwd_rule",
+    "_normalize_layout",
+    "check_cudnn_version",
+    "get_large_negative_number",
+    "should_export_dbias",
+    "MaskType",
+)
+
+
+@functools.cache
+def _cudnn_fused_attention():
+    """Resolve the private JAX cuDNN fused-attention module, on first use only.
+
+    These are the fwd/bwd rules that jax.nn.dot_product_attention(implementation="cudnn")
+    wires into its own custom_vjp; _cudnn_attention_in_dtype calls them directly so the
+    float16 kernel can run under loss scaling without recomputing the forward inside the
+    backward. They are private and only validated against the pinned jax 0.5.3.
+
+    The module itself is not the fragile part -- jax.nn imports it, so it is already loaded
+    by the time anything here runs. What a JAX upgrade actually breaks is the *names*: a
+    renamed `_dot_product_attention_bwd_rule` would otherwise surface as an AttributeError
+    from inside a traced VJP, mid-training. Checking them here turns that into one
+    actionable error, and only for configs that opted into cuDNN attention -- explicit
+    attention, CPU-only use and inference never reach this function.
+    """
+    try:
+        from jax._src.cudnn import fused_attention_stablehlo
+    except ImportError as error:  # pragma: no cover - depends on the installed jax
+        raise ImportError(
+            "cuDNN fused attention needs jax._src.cudnn.fused_attention_stablehlo, a private API "
+            f"validated against jax 0.5.3 and missing from the installed jax ({jax.__version__}). "
+            "Set model.use_cudnn_attention=false to use explicit attention, or revalidate the "
+            "fused path against this jax version. See docs/training-optimization.md."
+        ) from error
+
+    missing = [name for name in _CUDNN_FA_REQUIRED if not hasattr(fused_attention_stablehlo, name)]
+    if missing:
+        raise RuntimeError(
+            f"jax._src.cudnn.fused_attention_stablehlo (jax {jax.__version__}) no longer exposes "
+            f"{', '.join(missing)}. These are private APIs validated against jax 0.5.3. Set "
+            "model.use_cudnn_attention=false to use explicit attention, or revalidate the fused "
+            "path -- including convergence -- against this jax version. "
+            "See docs/training-optimization.md."
+        )
+    return fused_attention_stablehlo
+
+
 def _stop_gradient_for_fully_masked_queries(q, attn_mask):
     """Cut fully masked query rows out of the backward pass, keeping the mask intact.
 
@@ -214,6 +259,7 @@ def _cudnn_attention_in_dtype(q, k, v, attn_mask, compute_dtype):
     they exceed its range. Validate activation ranges when changing the model or data.
     """
     out_dtype = q.dtype
+    _cudnn_fa = _cudnn_fused_attention()
 
     # The forward and backward call JAX's cuDNN fwd/bwd rules directly (the same
     # functions jax.nn.dot_product_attention's own custom_vjp uses) instead of
@@ -268,6 +314,7 @@ def _cudnn_attention_in_dtype(q, k, v, attn_mask, compute_dtype):
 
 def _cudnn_static_args(bias_shape, query_shape):
     """Static parameters jax.nn.dot_product_attention(..., scale=1.0, implementation="cudnn") uses."""
+    _cudnn_fa = _cudnn_fused_attention()
     layout = _cudnn_fa._normalize_layout("BTNH")
     has_dbias = _cudnn_fa.should_export_dbias(bias_shape, query_shape, layout.value)
     # (scale, seed, dropout_rate, variadic_args, mask_type, layout, sliding_window_length, cudnn_version)
