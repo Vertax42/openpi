@@ -135,6 +135,12 @@ def init_train_state(
     return train_state, state_sharding
 
 
+# Metrics that `train_step` fills with NaN on the steps it skips them on, and that the
+# logging reduction therefore has to skip too. Everything else is reduced with a plain
+# mean so that a NaN reaches the log instead of disappearing.
+_NAN_PLACEHOLDER_METRICS = frozenset({"grad_norm", "param_norm"})
+
+
 @at.typecheck
 def train_step(
     config: _config.TrainConfig,
@@ -192,7 +198,7 @@ def train_step(
         param_norm = optax.global_norm(kernel_params)
     else:
         # Keep a stable output pytree for both JIT variants. The host-side logging
-        # reduction ignores these placeholders with nanmean.
+        # reduction drops these placeholders with nanmean; see _NAN_PLACEHOLDER_METRICS.
         grad_norm = jnp.asarray(jnp.nan, dtype=loss.dtype)
         param_norm = jnp.asarray(jnp.nan, dtype=loss.dtype)
 
@@ -306,7 +312,16 @@ def main(config: _config.TrainConfig):
         if step % config.log_interval == 0:
             t0 = time.monotonic()
             stacked_infos = common_utils.stack_forest(infos)
-            reduced_info = jax.device_get(jax.tree.map(jnp.nanmean, stacked_infos))
+            # Only the norms carry NaN placeholders from the steps that skipped the
+            # whole-model reductions, so only they may be reduced with nanmean. `loss`
+            # keeps a plain mean: a NaN loss is a divergence signal and has to reach
+            # the log rather than being silently dropped from the average.
+            reduced_info = jax.device_get(
+                {
+                    key: jnp.nanmean(value) if key in _NAN_PLACEHOLDER_METRICS else jnp.mean(value)
+                    for key, value in stacked_infos.items()
+                }
+            )
             info_str = ", ".join(f"{k}={v:.4f}" for k, v in reduced_info.items())
             pbar.write(f"Step {step}: {info_str}")
             # tqdm_loggable can drop pbar.write() lines when stdout is redirected.
