@@ -83,7 +83,8 @@ q/k/v 与 mask/bias 显式使用一致的 batch 分片，避免 cuDNN partitione
 
 保持 pip CUDA 12.8 库来源一致，避免将 `$CONDA_PREFIX/lib` 加到 `LD_LIBRARY_PATH` 前面。
 当前依赖配置使用 PyTorch 2.11 对应的 cuDNN 9.19；训练启动时记录 JAX cuDNN runtime 版本。
-运行 `check_cuda_stack.py` 检查实际加载的库来源与 BF16 GQA 前后向；该检查不替代 FP16 收敛验证。
+运行 `check_cuda_stack.py` 检查实际加载的库来源,以及生产 shape 下 BF16 内核与 FP16 custom VJP
+的前后向(含全空 mask 行的 dQ)。该检查只覆盖单次前后向数值,不替代 FP16 收敛验证。
 
 ```bash
 env -u LD_LIBRARY_PATH python scripts/check_cuda_stack.py

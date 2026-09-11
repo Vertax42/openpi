@@ -16,14 +16,26 @@ import re
 import sys
 
 FAIL = []
+# Major.minor only: pyproject pins these as ranges (torch >=2.11,<2.12 and friends), so an
+# exact pin here would fail the gate on every upstream patch release even though the
+# environment is still the supported one.
 EXPECTED = {
-    "torch": "2.11.0+cu128",
-    "torchvision": "0.26.0+cu128",
-    "torchcodec": "0.11.1+cu128",
-    "nvidia-cudnn-cu12": "9.19.0.56",
+    "torch": "2.11",
+    "torchvision": "0.26",
+    "torchcodec": "0.11",
+    "nvidia-cudnn-cu12": "9.19",
     "cuda": "12.8",
-    "cudnn": 91900,
 }
+# The three torch wheels must come from the cu128 index. A CPU-only wheel installs cleanly
+# and silently removes everything this script is here to check.
+CU_SUFFIX = "+cu128"
+CU_WHEELS = ("torch", "torchvision", "torchcodec")
+EXPECTED_CUDNN = (9, 19)
+
+
+def major_minor(version):
+    """'2.11.0+cu128' -> '2.11'. Also handles '9.19.0.56' and '12.8'."""
+    return ".".join(re.split(r"[.+]", str(version))[:2])
 
 
 def loaded_libs(pattern):
@@ -64,6 +76,8 @@ def main():
     import torchcodec
     import torchvision
 
+    import openpi.models.gemma as _gemma
+
     section("1. reported versions")
     rt, build = cuda_versions.cudnn_get_version(), cuda_versions.cudnn_build_version()
     cudnn_package_version = importlib.metadata.version("nvidia-cudnn-cu12")
@@ -85,11 +99,17 @@ def main():
         "torchcodec": torchcodec.__version__,
         "nvidia-cudnn-cu12": cudnn_package_version,
         "cuda": torch.version.cuda,
-        "cudnn": rt,
     }
     for name, expected in EXPECTED.items():
-        if actual[name] != expected:
-            FAIL.append(f"{name} must be {expected}, got {actual[name]}")
+        if major_minor(actual[name]) != expected:
+            FAIL.append(f"{name} must be {expected}.x, got {actual[name]}")
+    FAIL.extend(
+        f"{name} must be a {CU_SUFFIX} wheel, got {actual[name]}"
+        for name in CU_WHEELS
+        if not str(actual[name]).endswith(CU_SUFFIX)
+    )
+    if (rt // 10000, rt // 100 % 100) != EXPECTED_CUDNN:
+        FAIL.append(f"cuDNN runtime must be {EXPECTED_CUDNN[0]}.{EXPECTED_CUDNN[1]}.x, got {rt}")
     if torch_rt != rt:
         FAIL.append(f"PyTorch reports cuDNN {torch_rt}, while JAX reports {rt}")
 
@@ -138,7 +158,9 @@ def main():
     mask = jnp.logical_and(cs[:, None, :] <= cs[:, :, None], im_j[:, None, :] * im_j[:, :, None])[:, None]
     valid = np.asarray(jnp.any(mask, -1))[0, 0]
     n_empty = int((~np.asarray(jnp.any(mask, -1))).sum())
-    print(f"  shape batch_size={batch_size} seq_len={seq_len} heads={num_heads} kv={num_kv_heads} head_dim={head_dim} bf16")
+    print(
+        f"  shape batch_size={batch_size} seq_len={seq_len} heads={num_heads} kv={num_kv_heads} head_dim={head_dim} bf16"
+    )
     print(f"  fully-masked query rows in batch: {n_empty}")
 
     rng = np.random.default_rng(0)
@@ -154,7 +176,9 @@ def main():
         gq = q.reshape(batch_size, seq_len, num_kv_heads, num_heads // num_kv_heads, head_dim)
         lg = jnp.einsum("BTKGH,BSKH->BKGTS", gq, k, preferred_element_type=jnp.float32)
         lg = jnp.where(m[:, :, None], lg, -2.3819763e38)
-        return jnp.einsum("BKGTS,BSKH->BTKGH", jax.nn.softmax(lg, -1), v).reshape(batch_size, seq_len, num_heads, head_dim)
+        return jnp.einsum("BKGTS,BSKH->BTKGH", jax.nn.softmax(lg, -1), v).reshape(
+            batch_size, seq_len, num_heads, head_dim
+        )
 
     def cudnn(q, k, v, m):  # what training runs with use_cudnn_attention=true
         has_key = jnp.any(m, -1)[:, 0, :, None, None]
@@ -165,7 +189,9 @@ def main():
         return lambda q, k, v, m: jnp.sum(fn(q, k, v, m).astype(jnp.float32) * cot)
 
     try:
-        gr = [np.asarray(x.astype(jnp.float32), np.float64) for x in jax.grad(loss(reference), (0, 1, 2))(q, k, v, mask)]
+        gr = [
+            np.asarray(x.astype(jnp.float32), np.float64) for x in jax.grad(loss(reference), (0, 1, 2))(q, k, v, mask)
+        ]
         gc = [np.asarray(x.astype(jnp.float32), np.float64) for x in jax.grad(loss(cudnn), (0, 1, 2))(q, k, v, mask)]
     except Exception as exc:
         FAIL.append(f"cuDNN attention raised {type(exc).__name__}: {exc}")
@@ -182,13 +208,51 @@ def main():
                 FAIL.append(f"{nm}: rel-L2={rel:.3e} NaN={nan}")
             print(f"  {status} {nm}: rel-L2 vs fp32 = {rel:.3e}   NaN count = {nan}   (bf16 noise is ~3e-3)")
 
+    section("4. production FP16 custom VJP: forward + backward vs fp32 reference")
+
+    # Section 3 exercises the raw bf16 kernel, which docs/training-optimization.md marks
+    # unsafe for production. This is the path a production config actually runs:
+    #   model: {use_cudnn_attention: true, cudnn_attention_dtype: float16}
+    def cudnn_fp16(q, k, v, m):
+        return _gemma._cudnn_attention_in_dtype(q, k, v, m, jnp.float16)
+
+    gf = None
+    try:
+        gf = [
+            np.asarray(x.astype(jnp.float32), np.float64) for x in jax.grad(loss(cudnn_fp16), (0, 1, 2))(q, k, v, mask)
+        ]
+    except Exception as exc:
+        FAIL.append(f"FP16 cuDNN custom VJP raised {type(exc).__name__}: {exc}")
+        print(f"  !! FP16 cuDNN custom VJP FAILED: {type(exc).__name__}: {str(exc)[:300]}")
+
+    if gf is not None and gr is not None:
+        for i, nm in enumerate(("dQ", "dK", "dV")):
+            a, b = gf[i][:, valid], gr[i][:, valid]
+            rel = np.linalg.norm(a - b) / max(np.linalg.norm(b), 1e-30)
+            nan = int(np.isnan(gf[i]).sum())
+            status = "OK" if (nan == 0 and rel < 2e-2) else "!!"
+            if nan or rel >= 2e-2:
+                FAIL.append(f"FP16 {nm}: rel-L2={rel:.3e} NaN={nan}")
+            print(f"  {status} {nm}: rel-L2 vs fp32 = {rel:.3e}   NaN count = {nan}   (expect below the bf16 row)")
+
+        # The custom VJP promises a zero -- never NaN, never garbage -- q-gradient on the
+        # fully masked rows that padding produces. Check that at the production shape.
+        empty = ~valid
+        if empty.any():
+            nonzero = int(np.count_nonzero(gf[0][:, empty]))
+            status = "OK" if nonzero == 0 else "!!"
+            if nonzero:
+                FAIL.append(f"FP16 dQ is nonzero on {nonzero} fully-masked query entries")
+            print(f"  {status} dQ on {int(empty.sum())} fully-masked query rows: {nonzero} nonzero entries")
+
     section("verdict")
     if FAIL:
         print("  FAIL — do not start production training:")
         for f in FAIL:
             print(f"    - {f}")
         return 1
-    print("  PASS — single-source cuDNN stack, production-shape backward finite and accurate.")
+    print("  PASS — single-source cuDNN stack, production-shape backward finite and accurate,")
+    print("         for both the raw bf16 kernel and the FP16 custom VJP.")
     print("  NOTE: this gates the kernel only. It does NOT prove training converges;")
     print("        the 2026-08-30 divergence passed every check of this kind and still")
     print("        diverged between step 1000 and 1200. Watch the loss curve.")

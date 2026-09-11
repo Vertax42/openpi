@@ -243,8 +243,9 @@ env -u LD_LIBRARY_PATH \
 Do **not** prepend `$CONDA_PREFIX/lib` to `LD_LIBRARY_PATH`. The supported
 environment uses the pip CUDA 12.8 stack installed by `lerobot-xense`:
 PyTorch 2.11 pins cuDNN 9.19 and JAX shares that same runtime. Before training,
-run `python scripts/check_cuda_stack.py`; it rejects mixed library sources and
-checks the real BF16 GQA forward/backward shape.
+run `python scripts/check_cuda_stack.py`; it rejects mixed library sources and checks a
+real production-shape forward/backward for both the raw BF16 kernel and the FP16 custom
+VJP, including the fully-masked query rows.
 
 Full-layer cuDNN attention with the default `bfloat16` compute dtype is unsafe:
 it diverged from the explicit-attention baseline after roughly 1,000 steps.
